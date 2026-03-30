@@ -172,6 +172,37 @@
     .flink {
         cursor: pointer;
     }
+
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+      body { background-color: #1e1e1e; color: #d4d4d4; }
+      .liselected { background-color: #3a3a3a; }
+      .infoBar { background-color: #333; color: #d4d4d4; }
+      .infoBar.active, .infoBar:hover { background-color: #444; }
+      .stNHRow:nth-child(odd), .stSHRow:nth-child(odd),
+      .stNSRow:nth-child(odd), .stSSRow:nth-child(odd),
+      .stVRow:nth-child(odd) { background-color: #2a2a2a; }
+      #controlBar { border-bottom-color: #555; color: #d4d4d4; }
+      #controlBar > span:nth-child(n+2) { border-left-color: #555; }
+      .lifolder, .liscript { color: #d4d4d4; }
+      #dropBlock { color: #555; }
+      a, .flink { color: #6cb4ee; }
+    }
+    /* MeshCentral night mode class support */
+    body.night {
+      background-color: #1e1e1e; color: #d4d4d4;
+    }
+    body.night .liselected { background-color: #3a3a3a; }
+    body.night .infoBar { background-color: #333; color: #d4d4d4; }
+    body.night .infoBar.active, body.night .infoBar:hover { background-color: #444; }
+    body.night .stNHRow:nth-child(odd), body.night .stSHRow:nth-child(odd),
+    body.night .stNSRow:nth-child(odd), body.night .stSSRow:nth-child(odd),
+    body.night .stVRow:nth-child(odd) { background-color: #2a2a2a; }
+    body.night #controlBar { border-bottom-color: #555; color: #d4d4d4; }
+    body.night #controlBar > span:nth-child(n+2) { border-left-color: #555; }
+    body.night .lifolder, body.night .liscript { color: #d4d4d4; }
+    body.night #dropBlock { color: #555; }
+    body.night a, body.night .flink { color: #6cb4ee; }
 </style>
 <body onload="doOnLoad();">
 <div id="scriptTaskUser">
@@ -250,6 +281,13 @@
 </div>
 </body>
 <script type="text/javascript">
+  // Inherit dark/night mode from parent MeshCentral
+  try {
+    if (parent.document.body.classList.contains("night") ||
+        parent.document.documentElement.getAttribute("data-bs-theme") === "dark") {
+      document.body.classList.add("night");
+    }
+  } catch(e) {}
 var scriptTree = {{{scriptTree}}};
 var elementDragged = false;
 var dragCounter = 0;
