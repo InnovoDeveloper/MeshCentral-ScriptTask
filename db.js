@@ -1,7 +1,7 @@
-/** 
-* @description MeshCentral-ScriptTask database module
-* @author Ryan Blenis
-* @copyright Ryan Blenis 2019
+/**
+* @description MeshCentral-InnovoScriptTask database module
+* @author Innovo (forked from Ryan Blenis)
+* @copyright
 * @license Apache-2.0
 */
 
@@ -29,16 +29,18 @@ module.exports.CreateDB = function(meshserver) {
             });
         };
 
-        obj.addScript = function(name, content, path, filetype) {
+        obj.addScript = function(name, content, path, filetype, description, category) {
             if (path == null) path = "Shared"
             if (filetype == 'bash') content = content.split('\r\n').join('\n').split('\r').join('\n');
-            var sObj = { 
+            var sObj = {
                 type: 'script',
                 path: path,
                 name: name,
                 content: content,
                 contentHash: require('crypto').createHash('sha384').update(content).digest('hex'),
-                filetype: filetype
+                filetype: filetype,
+                description: description || '',
+                category: category || ''
             };
             return obj.scriptFile.insertOne(sObj);
         };
@@ -60,7 +62,7 @@ module.exports.CreateDB = function(meshserver) {
             ).sort(
                 { path: 1, type: 1, name: 1 }
             ).project(
-                { name: 1, path: 1, type: 1, filetype: 1 }
+                { name: 1, path: 1, type: 1, filetype: 1, description: 1, category: 1 }
             ).toArray();
         };
         
@@ -113,13 +115,13 @@ module.exports.CreateDB = function(meshserver) {
           };
           var jObj = {...defaultObj, ...passedObj};
           
-          if (jObj.node == null || jObj.scriptId == null) { console.log('PLUGIN: SciptTask: Could not add job'); return false; }
+          if (jObj.node == null || jObj.scriptId == null) { console.log('PLUGIN: InnovoScriptTask: Could not add job'); return false; }
           
           return obj.scriptFile.insertOne(jObj);
         };
         obj.addJobSchedule = function(schedObj) {
             schedObj.type = 'jobSchedule';
-            if (schedObj.node == null || schedObj.scriptId == null) { console.log('PLUGIN: SciptTask: Could not add job schedule'); return false; }
+            if (schedObj.node == null || schedObj.scriptId == null) { console.log('PLUGIN: InnovoScriptTask: Could not add job schedule'); return false; }
             return obj.scriptFile.insertOne(schedObj);
         };
         obj.removeJobSchedule = function (id) {
@@ -245,7 +247,7 @@ module.exports.CreateDB = function(meshserver) {
             .then(found => {
               if (found.length == 0) obj.addFolder('Shared', 'Shared');
             })
-            .catch(e => { console.log('PLUGIN: ScriptTask: Default folder check failed. Error was: ', e); });
+            .catch(e => { console.log('PLUGIN: InnovoScriptTask: Default folder check failed. Error was: ', e); });
         };
         
         obj.checkDefaults();
@@ -259,14 +261,14 @@ module.exports.CreateDB = function(meshserver) {
           if (meshserver.args.mongodbname) { dbname = meshserver.args.mongodbname; }
           const db = client.db(dbname);
           
-          obj.scriptFile = db.collection('plugin_scripttask');
+          obj.scriptFile = db.collection('plugin_innovoscripttask');
           obj.scriptFile.indexes(function (err, indexes) {
               // Check if we need to reset indexes
               var indexesByName = {}, indexCount = 0;
               for (var i in indexes) { indexesByName[indexes[i].name] = indexes[i]; indexCount++; }
               if ((indexCount != 6) || (indexesByName['ScriptName1'] == null) || (indexesByName['ScriptPath1'] == null) || (indexesByName['JobTime1'] == null) || (indexesByName['JobNode1'] == null) || (indexesByName['JobScriptID1'] == null)) {
                   // Reset all indexes
-                  console.log('Resetting plugin (ScriptTask) indexes...');
+                  console.log('Resetting plugin (InnovoScriptTask) indexes...');
                   obj.scriptFile.dropIndexes(function (err) {
                       obj.scriptFile.createIndex({ name: 1 }, { name: 'ScriptName1' });
                       obj.scriptFile.createIndex({ path: 1 }, { name: 'ScriptPath1' });
@@ -292,7 +294,7 @@ module.exports.CreateDB = function(meshserver) {
             if (Datastore == null) { Datastore = require('nedb'); } // So not to break any existing installations, if the old NeDB is present, use it.
         }
         if (obj.scriptFilex == null) {
-            obj.scriptFilex = new Datastore({ filename: meshserver.getConfigFilePath('plugin-scripttask.db'), autoload: true });
+            obj.scriptFilex = new Datastore({ filename: meshserver.getConfigFilePath('plugin-innovoscripttask.db'), autoload: true });
             obj.scriptFilex.setAutocompactionInterval(40000);
             obj.scriptFilex.ensureIndex({ fieldName: 'name' });
             obj.scriptFilex.ensureIndex({ fieldName: 'path' });

@@ -1,13 +1,13 @@
-/** 
-* @description MeshCentral ScriptTask
-* @author Ryan Blenis
-* @copyright 
+/**
+* @description MeshCentral InnovoScriptTask
+* @author Innovo (forked from Ryan Blenis)
+* @copyright
 * @license Apache-2.0
 */
 
 "use strict";
 
-module.exports.scripttask = function (parent) {
+module.exports.innovoscripttask = function (parent) {
     var obj = {};
     obj.parent = parent;
     obj.meshServer = parent.parent;
@@ -24,9 +24,9 @@ module.exports.scripttask = function (parent) {
     ];
     
     obj.malix_triggerOption = function(selectElem) {
-        selectElem.options.add(new Option("ScriptTask - Run Script", "scripttask_runscript"));
+        selectElem.options.add(new Option("InnovoScriptTask - Run Script", "innovoscripttask_runscript"));
     }
-    obj.malix_triggerFields_scripttask_runscript = function() {
+    obj.malix_triggerFields_innovoscripttask_runscript = function() {
         
     }
     obj.resetQueueTimer = function() {
@@ -35,21 +35,21 @@ module.exports.scripttask = function (parent) {
     };
     
     obj.server_startup = function() {
-        obj.meshServer.pluginHandler.scripttask_db = require (__dirname + '/db.js').CreateDB(obj.meshServer);
-        obj.db = obj.meshServer.pluginHandler.scripttask_db;
+        obj.meshServer.pluginHandler.innovoscripttask_db = require (__dirname + '/db.js').CreateDB(obj.meshServer);
+        obj.db = obj.meshServer.pluginHandler.innovoscripttask_db;
         obj.resetQueueTimer();
     };
     
     obj.onDeviceRefreshEnd = function() {
         pluginHandler.registerPluginTab({
-            tabTitle: 'ScriptTask',
-            tabId: 'pluginScriptTask'
+            tabTitle: 'InnovoScriptTask',
+            tabId: 'pluginInnovoScriptTask'
         });
-        QA('pluginScriptTask', '<iframe id="pluginIframeScriptTask" style="width: 100%; height: 700px; overflow: auto" scrolling="yes" frameBorder=0 src="/pluginadmin.ashx?pin=scripttask&user=1" />');
+        QA('pluginInnovoScriptTask', '<iframe id="pluginIframeInnovoScriptTask" style="width: 100%; height: 700px; overflow: auto" scrolling="yes" frameBorder=0 src="/pluginadmin.ashx?pin=innovoscripttask&user=1" />');
     };
     // may not be needed, saving for later. Can be called to resize iFrame
     obj.resizeContent = function() {
-        var iFrame = document.getElementById('pluginIframeScriptTask');
+        var iFrame = document.getElementById('pluginIframeInnovoScriptTask');
         var newHeight = 700;
         //var sHeight = iFrame.contentWindow.document.body.scrollHeight;
         //if (sHeight > newHeight) newHeight = sHeight;
@@ -69,7 +69,7 @@ module.exports.scripttask = function (parent) {
                 obj.db.get(job.scriptId)
                 .then(async (script) => {
                     script = script[0];
-                    if (!script || !script.content) { console.log("PLUGIN: ScriptTask: Skipping job " + job._id + " — script not found (scriptId: " + job.scriptId + ")"); return; }
+                    if (!script || !script.content) { console.log("PLUGIN: InnovoScriptTask: Skipping job " + job._id + " — script not found (scriptId: " + job.scriptId + ")"); return; }
                     var foundVars = script.content.match(/#(.*?)#/g);
                     var replaceVars = {};
                     if (foundVars != null && foundVars.length > 0) {
@@ -101,7 +101,7 @@ module.exports.scripttask = function (parent) {
                     var dispatchTime = Math.floor(new Date() / 1000);
                     var jObj = { 
                         action: 'plugin', 
-                        plugin: 'scripttask', 
+                        plugin: 'innovoscripttask', 
                         pluginaction: 'triggerJob',
                         jobId: job._id,
                         scriptId: job.scriptId,
@@ -115,14 +115,14 @@ module.exports.scripttask = function (parent) {
                         obj.db.update(job._id, { dispatchTime: dispatchTime });
                     } catch (e) { }
                 })
-                .catch(e => console.log('PLUGIN: ScriptTask: Could not dispatch job.', e));
+                .catch(e => console.log('PLUGIN: InnovoScriptTask: Could not dispatch job.', e));
             });
         })
         .then(() => {
             obj.makeJobsFromSchedules();
             obj.cleanHistory();
         })
-        .catch(e => { console.log('PLUGIN: ScriptTask: Queue Run Error: ', e); });
+        .catch(e => { console.log('PLUGIN: InnovoScriptTask: Queue Run Error: ', e); });
     };
     
     obj.cleanHistory = function() {
@@ -155,7 +155,7 @@ module.exports.scripttask = function (parent) {
             })
             .then((scriptSchedule) => {
                 var targets = ['*', 'server-users'];
-                obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'scripttask', pluginaction: 'historyData', scriptId: ids.scriptId, nodeId: null, scriptHistory: scriptHistory, nodeHistory: null, scriptSchedule: scriptSchedule });
+                obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'historyData', scriptId: ids.scriptId, nodeId: null, scriptHistory: scriptHistory, nodeHistory: null, scriptSchedule: scriptSchedule });
             });
         }
         if (ids.nodeId != null) {
@@ -167,21 +167,21 @@ module.exports.scripttask = function (parent) {
             })
             .then((nodeSchedule) => {
                 var targets = ['*', 'server-users'];
-                obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'scripttask', pluginaction: 'historyData', scriptId: null, nodeId: ids.nodeId, scriptHistory: null, nodeHistory: nodeHistory, nodeSchedule: nodeSchedule });
+                obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'historyData', scriptId: null, nodeId: ids.nodeId, scriptHistory: null, nodeHistory: nodeHistory, nodeSchedule: nodeSchedule });
             });
         }
         if (ids.tree === true) {
             obj.db.getScriptTree()
             .then((tree) => {
                 var targets = ['*', 'server-users'];
-                obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'scripttask', pluginaction: 'newScriptTree', tree: tree });
+                obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'newScriptTree', tree: tree });
             });
         }
         if (ids.variables === true) {
             obj.db.getVariables()
             .then((vars) => {
                 var targets = ['*', 'server-users'];
-                obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'scripttask', pluginaction: 'variableData', vars: vars });
+                obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'variableData', vars: vars });
             });
         }
     };
@@ -241,12 +241,12 @@ module.exports.scripttask = function (parent) {
     };
     
     obj.historyData = function (message) {
-        if (typeof pluginHandler.scripttask.loadHistory == 'function') pluginHandler.scripttask.loadHistory(message);
-        if (typeof pluginHandler.scripttask.loadSchedule == 'function') pluginHandler.scripttask.loadSchedule(message);
+        if (typeof pluginHandler.innovoscripttask.loadHistory == 'function') pluginHandler.innovoscripttask.loadHistory(message);
+        if (typeof pluginHandler.innovoscripttask.loadSchedule == 'function') pluginHandler.innovoscripttask.loadSchedule(message);
     };
     
     obj.variableData = function (message) {
-        if (typeof pluginHandler.scripttask.loadVariables == 'function') pluginHandler.scripttask.loadVariables(message);
+        if (typeof pluginHandler.innovoscripttask.loadVariables == 'function') pluginHandler.innovoscripttask.loadVariables(message);
     };
     
     obj.determineNextJobTime = function(s) {
@@ -404,7 +404,7 @@ module.exports.scripttask = function (parent) {
                         .then(() => {
                             obj.updateFrontEnd( { scriptId: s.scriptId, nodeId: s.node } );
                         })
-                        .catch((e) => { console.log('PLUGIN: ScriptTask: Error managing job schedules: ', e); });
+                        .catch((e) => { console.log('PLUGIN: InnovoScriptTask: Error managing job schedules: ', e); });
                     }
                 });
             }
@@ -435,13 +435,13 @@ module.exports.scripttask = function (parent) {
           }
           return obj.updateFrontEnd( updateObj );
         })
-        .catch(e => { console.log('PLUGIN: ScriptTask: Error deleting ', e.stack); });
+        .catch(e => { console.log('PLUGIN: InnovoScriptTask: Error deleting ', e.stack); });
     };
     
     obj.serveraction = function(command, myparent, grandparent) {
         switch (command.pluginaction) {
             case 'addScript':
-                obj.db.addScript(command.name, command.content, command.path, command.filetype)
+                obj.db.addScript(command.name, command.content, command.path, command.filetype, command.description, command.category)
                 .then(() => {
                     obj.updateFrontEnd( { tree: true } );
                 });            
@@ -535,7 +535,7 @@ module.exports.scripttask = function (parent) {
               .then(() => {
                 return obj.updateFrontEnd( { tree: true } );
               })
-              .catch(e => { console.log('PLUGIN: ScriptTask: Error moving ', e.stack); });
+              .catch(e => { console.log('PLUGIN: InnovoScriptTask: Error moving ', e.stack); });
             break;
             case 'newFolder':
               var parent_path = '';
@@ -559,7 +559,7 @@ module.exports.scripttask = function (parent) {
               .then(() => {
                 return obj.updateFrontEnd( { tree: true } );
               })
-              .catch(e => { console.log('PLUGIN: ScriptTask: Error creating new folder ', e.stack); });
+              .catch(e => { console.log('PLUGIN: InnovoScriptTask: Error creating new folder ', e.stack); });
             break;
             case 'delete':
               obj.deleteElement(command);
@@ -612,7 +612,7 @@ module.exports.scripttask = function (parent) {
                     obj.makeJobsFromSchedules();
                     return Promise.resolve();
                 })
-                .catch(e => { console.log('PLUGIN: ScriptTask: Error adding schedules. The error was: ', e); });
+                .catch(e => { console.log('PLUGIN: InnovoScriptTask: Error adding schedules. The error was: ', e); });
             break;
             case 'runScript':
               var scriptId = command.scriptId;
@@ -644,7 +644,7 @@ module.exports.scripttask = function (parent) {
                 .then(script => {
                     myparent.send(JSON.stringify({ 
                         action: 'plugin',
-                        plugin: 'scripttask',
+                        plugin: 'innovoscripttask',
                         pluginaction: 'cacheScript',
                         nodeid: myparent.dbNodeKey,
                         rights: true,
@@ -680,7 +680,7 @@ module.exports.scripttask = function (parent) {
                 .then(() => {
                     obj.updateFrontEnd( { scriptId: command.scriptId, nodeId: myparent.dbNodeKey } );
                 })
-                .catch(e => { console.log('PLUGIN: ScriptTask: Failed to complete job. ', e); });
+                .catch(e => { console.log('PLUGIN: InnovoScriptTask: Failed to complete job. ', e); });
                 // update front end by eventing
             break;
             case 'loadNodeHistory':
@@ -690,7 +690,10 @@ module.exports.scripttask = function (parent) {
                 obj.updateFrontEnd( { scriptId: command.scriptId } );
             break;
             case 'editScript':
-                obj.db.update(command.scriptId, { type: command.scriptType, name: command.scriptName, content: command.scriptContent })
+                var updateFields = { type: command.scriptType, name: command.scriptName, content: command.scriptContent };
+                if (command.scriptDescription !== undefined) updateFields.description = command.scriptDescription;
+                if (command.scriptCategory !== undefined) updateFields.category = command.scriptCategory;
+                obj.db.update(command.scriptId, updateFields)
                 .then(() => {
                     obj.updateFrontEnd( { scriptId: command.scriptId, tree: true } );
                 });
@@ -725,7 +728,7 @@ module.exports.scripttask = function (parent) {
                 })
             break;
             default:
-                console.log('PLUGIN: ScriptTask: unknown action');
+                console.log('PLUGIN: InnovoScriptTask: unknown action');
             break;
         }
     };

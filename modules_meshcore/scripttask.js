@@ -1,7 +1,7 @@
-/** 
-* @description MeshCentral ScriptTask plugin
-* @author Ryan Blenis
-* @copyright 
+/**
+* @description MeshCentral InnovoScriptTask plugin
+* @author Innovo (forked from Ryan Blenis)
+* @copyright
 * @license Apache-2.0
 */
 
@@ -65,7 +65,7 @@ function consoleaction(args, rights, sessionid, parent) {
                 //dbg('Getting and caching script '+ jObj.scriptId);
                 mesh.SendCommand({ 
                     "action": "plugin", 
-                    "plugin": "scripttask",
+                    "plugin": "innovoscripttask",
                     "pluginaction": "getScript",
                     "scriptId": jObj.scriptId, 
                     "sessionid": _sessionid,
@@ -97,7 +97,7 @@ function consoleaction(args, rights, sessionid, parent) {
             clearCache();
             mesh.SendCommand({ 
                 "action": "plugin", 
-                "plugin": "scripttask",
+                "plugin": "innovoscripttask",
                 "pluginaction": "clearAllPendingJobs",
                 "sessionid": _sessionid,
                 "tag": "console"
@@ -133,7 +133,7 @@ function finalizeJob(job, retVal, errVal) {
     if (typeof runningJobPIDs[job.jobId] != 'undefined') delete runningJobPIDs[job.jobId];
     mesh.SendCommand({ 
         "action": "plugin", 
-        "plugin": "scripttask",
+        "plugin": "innovoscripttask",
         "pluginaction": "jobComplete",
         "jobId": job.jobId,
         "scriptId": job.scriptId,
@@ -477,7 +477,7 @@ function runScript(sObj, jObj) {
     }
 }
 function getScriptFromCache(id) {
-    var script = db.Get('pluginScriptTask_script_' + id);
+    var script = db.Get('pluginInnovoScriptTask_script_' + id);
     if (script == '' || script == null) return null;
     try {
         script = JSON.parse(script);
@@ -485,11 +485,11 @@ function getScriptFromCache(id) {
     return script;
 }
 function cacheScript(sObj) {
-    db.Put('pluginScriptTask_script_' + sObj._id, sObj);
+    db.Put('pluginInnovoScriptTask_script_' + sObj._id, sObj);
 }
 function clearCache() {
     db.Keys.forEach(function(k) {
-        if (k.indexOf('pluginScriptTask_script_') === 0) {
+        if (k.indexOf('pluginInnovoScriptTask_script_') === 0) {
             db.Put(k, null);
             db.Delete(k);
         }

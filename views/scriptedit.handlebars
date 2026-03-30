@@ -21,8 +21,11 @@
     #scriptNameC {
         padding: 20px;
     }
-    #scriptName {
+    #scriptName, #scriptCategory {
         width: 300px;
+    }
+    #scriptDescription {
+        width: 500px;
     }
     #controlBar {
         padding: 5px;
@@ -35,7 +38,20 @@
 </style>
 <body onload="doOnLoad();">
 <div id="scriptTaskScriptEdit">
-  <div id="scriptNameC">Script Name: <input type="text" value="" id="scriptName"/></div>
+  <div id="scriptNameC">
+    Script Name: <input type="text" value="" id="scriptName"/>
+    &nbsp;&nbsp;Category: <select id="scriptCategory">
+      <option value="">-- None --</option>
+      <option value="V1">V1</option>
+      <option value="V2">V2</option>
+      <option value="Aura">Aura</option>
+      <option value="KNX">KNX</option>
+      <option value="Maintenance">Maintenance</option>
+      <option value="Diagnostics">Diagnostics</option>
+      <option value="Patching">Patching</option>
+    </select>
+    <br/>Description: <input type="text" value="" id="scriptDescription" placeholder="One-line summary of what this script does"/>
+  </div>
   <div id="controlBar">
     <button onclick="goSave();">Save</button>
     <button onclick="goClose();">Close</button>
@@ -49,16 +65,20 @@
 var scriptData = {{{scriptData}}};
 
 function doOnLoad() {
-    //QH('scriptContent', scriptData.content);
     Q('scriptContent').value = scriptData.content;
     Q('scriptName').value = scriptData.name;
+    Q('scriptDescription').value = scriptData.description || '';
+    if (scriptData.category) {
+        Q('scriptCategory').value = scriptData.category;
+    }
 }
 
 function goSave() {
     scriptData.content = Q('scriptContent').value;
     scriptData.name = Q('scriptName').value;
+    scriptData.description = Q('scriptDescription').value;
+    scriptData.category = Q('scriptCategory').value;
     window.opener.callback(scriptData);
-    //goClose();
 }
 
 function goClose() {
