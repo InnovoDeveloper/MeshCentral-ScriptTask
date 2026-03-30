@@ -58,3 +58,36 @@ This is fairly new and in beta. Testing was mostly done in the latest Chrome and
 ![Script Editor](https://user-images.githubusercontent.com/1929277/71248034-f4519b00-22e7-11ea-8ab4-ccad3e959a1a.png)
 ![Schedule Screen](https://user-images.githubusercontent.com/1929277/71248469-e7817700-22e8-11ea-9121-a215de160e0e.png)
 
+
+---
+
+## Innovo Fork Changes
+
+This fork ([InnovoDeveloper/MeshCentral-ScriptTask](https://github.com/InnovoDeveloper/MeshCentral-ScriptTask)) adds the following fixes:
+
+### 1. Orphaned Job Crash Fix
+Scripts deleted while scheduled jobs still reference them caused a crash:
+`TypeError: Cannot read properties of undefined (reading 'content')`
+
+Now skips orphaned jobs with a log message instead of crashing.
+
+### 2. Dark Mode / Night Mode Support
+The plugin iframe now respects MeshCentral's night mode and OS-level dark mode. Previously, dark mode reversed the background but left text colors unchanged, making content invisible.
+
+### 3. MeshCentral Modern Theme (siteStyle: 2) Compatibility
+
+The modern theme (`default3.handlebars`) uses Bootstrap modals instead of the plain dialog div. The `setDialogMode()` function populates the modal content but never calls `showModal()` to display it, causing New, Rename, Delete, and New Folder buttons to silently fail.
+
+**To fix this**, apply the following one-line patch to your MeshCentral installation's `default3.handlebars`:
+
+Find this line in `node_modules/meshcentral/views/default3.handlebars`:
+```javascript
+if (x == 0) { if (xxModal) xxModal.hide(); }
+```
+
+Replace with:
+```javascript
+if (x == 0) { if (xxModal) xxModal.hide(); } else if (x > 0) { showModal('xxAddAgentModal', 'idx_dlgOkButton', function() { dialogclose(1); }); }
+```
+
+**Note:** This patch is in the MeshCentral core, not the plugin, so it will be overwritten by MeshCentral updates. Re-apply after upgrading MeshCentral until the fix is merged upstream.
