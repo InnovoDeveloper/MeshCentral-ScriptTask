@@ -92,7 +92,7 @@
       font-weight: 600; font-size: 12px; color: var(--fg2);
     }
     .lifolder:hover { background: var(--folder-bg); }
-    .lifolder::before { content: "\uD83D\uDCC1"; font-size: 14px; }
+    .lifolder .folder-icon { width: 14px; height: 14px; flex-shrink: 0; fill: #d4a017; }
     .liscript {
       padding: 5px 8px 5px 12px; cursor: pointer; border: none;
       display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
@@ -100,7 +100,7 @@
       font-size: 12px;
     }
     .liscript:hover { background: var(--bg2); }
-    .liscript::before { content: "\uD83D\uDCC4"; font-size: 13px; }
+    .liscript .script-icon { width: 14px; height: 14px; flex-shrink: 0; fill: var(--fg3); }
     .liselected { background: var(--selected-bg) !important; border-left: 3px solid var(--accent); }
     .fname { font-weight: 500; }
     .ftype {
@@ -847,7 +847,7 @@ function redrawScriptTree() {
       indent = (f.path.match(/\//g) || []).length + 1;
       var name = f.path.match(/[^\/]+$/);
       folder_id = f._id;
-      str += '<div draggable="true" x-data-path="' + f.path + '" x-data-id="' + f._id + '" x-data-folder="' + folder_id + '" style="padding-left: ' + (indent * 16) + 'px;" class="lifolder" onclick="toggleCollapse(this);"><span class="fname">' + name + '</span></div>';
+      str += '<div draggable="true" x-data-path="' + f.path + '" x-data-id="' + f._id + '" x-data-folder="' + folder_id + '" style="padding-left: ' + (indent * 16) + 'px;" class="lifolder" onclick="toggleCollapse(this);"><svg class="folder-icon" viewBox="0 0 16 16"><path d="M.54 3.87.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3H13.5a2 2 0 0 1 2 2v.09A1.98 1.98 0 0 0 15 5h-1a1 1 0 0 0-1 1v.5a.5.5 0 0 1-1 0V6a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.5a.5.5 0 0 1 1 0V13a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V5a2 2 0 0 1 .367-1.13z"/></svg><span class="fname">' + name + '</span></div>';
       lastpath = f.path;
       indent += 1;
     }
@@ -855,7 +855,7 @@ function redrawScriptTree() {
         var catBadge = (f.category) ? ' <span class="catBadge" data-cat="' + escHtml(f.category) + '">' + escHtml(f.category) + '</span>' : '';
         var descTitle = (f.description) ? ' title="' + escHtml(f.description) + '"' : '';
         var descLine = (f.description) ? '<div class="scriptDesc" style="padding-left: ' + (indent * 16 + 24) + 'px;">' + escHtml(f.description) + '</div>' : '';
-        str += '<div id="' + f._id + '" draggable="true" x-data-path="' + f.path + '" x-data-id="' + f._id + '" x-data-folder="' + folder_id + '" x-data-category="' + escHtml(f.category || '') + '" x-data-description="' + escHtml(f.description || '') + '" style="padding-left: ' + (indent * 16) + 'px;" class="liscript"' + descTitle + ' onclick="goScript(this);"><span class="fname">' + f.name + '</span> <span class="ftype">' + f.filetype + '</span>' + catBadge + '</div>' + descLine;
+        str += '<div id="' + f._id + '" draggable="true" x-data-path="' + f.path + '" x-data-id="' + f._id + '" x-data-folder="' + folder_id + '" x-data-category="' + escHtml(f.category || '') + '" x-data-description="' + escHtml(f.description || '') + '" style="padding-left: ' + (indent * 16) + 'px;" class="liscript"' + descTitle + ' onclick="goScript(this);"><svg class="script-icon" viewBox="0 0 16 16"><path d="M5.5 7a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1zM5 9.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5"/><path d="M9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.5zm0 1v2A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/></svg><span class="fname">' + f.name + '</span> <span class="ftype">' + f.filetype + '</span>' + catBadge + '</div>' + descLine;
     }
   });
   str += '</div>';
