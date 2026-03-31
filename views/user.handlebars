@@ -487,7 +487,7 @@ function parseTags(tags) {
     var info = { deviceType: '', dp: '', ha: '', patch: '', py: '', schema: '', ip: '', mac: '', raw: tags || [] };
     if (!tags || !tags.length) return info;
     tags.forEach(function(t) {
-        if (/^MagicCube/i.test(t)) info.deviceType = t;
+        if (/^(MagicCube|MagicPro|MC-|MCPlaya)/i.test(t)) info.deviceType = t;
         else if (/^dp-\s/i.test(t)) info.dp = t.replace(/^dp-\s*/i, '');
         else if (/^ha-\s/i.test(t)) info.ha = t.replace(/^ha-\s*/i, '');
         else if (/^p-\s/i.test(t)) info.patch = t.replace(/^p-\s*/i, '');
@@ -518,7 +518,7 @@ function updateNodesTable() {
 
           // Build info badges
           var badges = '';
-          if (ti.deviceType) badges += '<span class="arTagBadge">' + escHtml(ti.deviceType.replace('MagicCube','')) + '</span>';
+          if (ti.deviceType) badges += '<span class="arTagBadge">' + escHtml(ti.deviceType.replace(/^MagicCube/,'')) + '</span>';
           if (ti.dp) badges += '<span class="arTagBadge">dp ' + escHtml(ti.dp) + '</span>';
           if (ti.ha) badges += '<span class="arTagBadge">ha ' + escHtml(ti.ha) + '</span>';
           if (ti.patch) badges += '<span class="arTagBadge">p' + escHtml(ti.patch) + '</span>';
