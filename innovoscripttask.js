@@ -747,6 +747,10 @@ module.exports.innovoscripttask = function (parent) {
                 obj.db.addMeta(command.metaType, command.name, command.color)
                 .then(() => { obj.updateFrontEnd( { meta: true, tree: true } ); });
             break;
+            case 'renameMeta':
+                obj.db.renameMeta(command.id, command.metaType, command.name, command.color)
+                .then(() => { obj.updateFrontEnd( { meta: true, tree: true } ); });
+            break;
             case 'deleteMeta':
                 obj.db.deleteMeta(command.id)
                 .then(() => { obj.updateFrontEnd( { meta: true, tree: true } ); });

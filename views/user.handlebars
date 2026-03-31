@@ -138,6 +138,10 @@
       cursor: pointer; font-size: 14px; color: var(--fg3); margin-left: 2px;
     }
     .metaItem .metaDel:hover { color: var(--red); }
+    .metaItem .metaEdit {
+      cursor: pointer; font-size: 13px; color: var(--fg3); margin-left: 2px;
+    }
+    .metaItem .metaEdit:hover { color: var(--accent); }
     .metaDot {
       width: 8px; height: 8px; border-radius: 50%; display: inline-block;
     }
@@ -1160,14 +1164,22 @@ function redrawScriptTree() {
       metaCategories.forEach(function(c) {
           var el = document.createElement('span');
           el.className = 'metaItem';
-          el.innerHTML = '<span class="metaDot" style="background:' + (c.color || '#888') + '"></span>' + escHtml(c.name) + '<span class="metaDel" data-id="' + c._id + '" onclick="deleteMeta(this);">&times;</span>';
+          el.setAttribute('data-id', c._id);
+          el.setAttribute('data-name', c.name);
+          el.setAttribute('data-color', c.color || '');
+          el.setAttribute('data-metatype', 'category');
+          el.innerHTML = '<span class="metaDot" style="background:' + (c.color || '#888') + '"></span><span class="metaName">' + escHtml(c.name) + '</span><span class="metaEdit" onclick="editMeta(this.parentNode);" title="Rename">&#9998;</span><span class="metaDel" onclick="deleteMeta(this.parentNode);" title="Delete">&times;</span>';
           catList.appendChild(el);
       });
       var tagList = Q('metaTagList'); tagList.innerHTML = '';
       metaTags.forEach(function(t) {
           var el = document.createElement('span');
           el.className = 'metaItem';
-          el.innerHTML = escHtml(t.name) + '<span class="metaDel" data-id="' + t._id + '" onclick="deleteMeta(this);">&times;</span>';
+          el.setAttribute('data-id', t._id);
+          el.setAttribute('data-name', t.name);
+          el.setAttribute('data-color', '');
+          el.setAttribute('data-metatype', 'tag');
+          el.innerHTML = '<span class="metaName">' + escHtml(t.name) + '</span><span class="metaEdit" onclick="editMeta(this.parentNode);" title="Rename">&#9998;</span><span class="metaDel" onclick="deleteMeta(this.parentNode);" title="Delete">&times;</span>';
           tagList.appendChild(el);
       });
   }
@@ -1179,9 +1191,26 @@ function redrawScriptTree() {
       parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'addMeta', metaType: metaType, name: name, color: color });
       nameInput.value = '';
   }
+  function editMeta(el) {
+      var id = el.getAttribute('data-id');
+      var oldName = el.getAttribute('data-name');
+      var oldColor = el.getAttribute('data-color');
+      var metaType = el.getAttribute('data-metatype');
+      var colorHtml = (metaType === 'category') ? '<br/>Color: <input type="color" id="stmetacolor" value="' + (oldColor || '#888888') + '" />' : '';
+      parent.setDialogMode(2, "Rename " + metaType, 3, function() {
+          var newName = parent.document.getElementById('stmetaname').value.trim();
+          if (!newName) return;
+          var newColor = (metaType === 'category' && parent.document.getElementById('stmetacolor')) ? parent.document.getElementById('stmetacolor').value : oldColor;
+          parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'renameMeta', id: id, metaType: metaType, name: newName, color: newColor });
+      }, 'Name: <input type="text" id="stmetaname" value="' + escHtml(oldName) + '" style="width:100%" />' + colorHtml);
+      parent.focusTextBox('stmetaname');
+  }
   function deleteMeta(el) {
       var id = el.getAttribute('data-id');
-      parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'deleteMeta', id: id });
+      var name = el.getAttribute('data-name');
+      parent.setDialogMode(2, "Delete", 3, function() {
+          parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'deleteMeta', id: id });
+      }, 'Delete <b>' + escHtml(name) + '</b>? Scripts using it will keep the old value until edited.');
   }
 
   function secondsToHms(d) {
