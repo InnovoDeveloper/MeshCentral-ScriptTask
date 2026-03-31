@@ -250,6 +250,37 @@ module.exports.CreateDB = function(meshserver) {
         obj.addMeta = function(metaType, name, color) {
             return obj.scriptFile.insertOne({ type: 'meta', metaType: metaType, name: name, color: color || '' });
         };
+        obj.renameMeta = function(id, metaType, newName, newColor) {
+            id = formatId(id);
+            return obj.scriptFile.find({ _id: id }).toArray()
+            .then(function(found) {
+                if (found.length === 0) return Promise.resolve();
+                var oldName = found[0].name;
+                var updateObj = { name: newName };
+                if (newColor !== undefined) updateObj.color = newColor;
+                return obj.scriptFile.updateOne({ _id: id }, { $set: updateObj })
+                .then(function() {
+                    // Cascade rename to all scripts referencing the old name
+                    if (metaType === 'category') {
+                        return obj.scriptFile.updateMany(
+                            { type: 'script', category: oldName },
+                            { $set: { category: newName } }
+                        );
+                    } else if (metaType === 'tag') {
+                        // For tags: find scripts with old tag, replace in array
+                        return obj.scriptFile.find({ type: 'script', tags: oldName }).toArray()
+                        .then(function(scripts) {
+                            var proms = [];
+                            scripts.forEach(function(s) {
+                                var newTags = s.tags.map(function(t) { return t === oldName ? newName : t; });
+                                proms.push(obj.scriptFile.updateOne({ _id: s._id }, { $set: { tags: newTags } }));
+                            });
+                            return Promise.all(proms);
+                        });
+                    }
+                });
+            });
+        };
         obj.deleteMeta = function(id) {
             id = formatId(id);
             return obj.scriptFile.deleteOne({ _id: id });

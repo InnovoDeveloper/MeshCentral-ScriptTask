@@ -15,11 +15,12 @@ module.exports.innovoscripttask = function (parent) {
     obj.intervalTimer = null;
     obj.debug = obj.meshServer.debug;
     obj.VIEWS = __dirname + '/views/';
-    obj.exports = [      
+    obj.exports = [
         'onDeviceRefreshEnd',
         'resizeContent',
         'historyData',
         'variableData',
+        'metaData',
         'malix_triggerOption'
     ];
     
@@ -184,6 +185,13 @@ module.exports.innovoscripttask = function (parent) {
                 obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'variableData', vars: vars });
             });
         }
+        if (ids.meta === true) {
+            Promise.all([obj.db.getMetaList('category'), obj.db.getMetaList('tag')])
+            .then(([categories, tags]) => {
+                var targets = ['*', 'server-users'];
+                obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'metaData', categories: categories, tags: tags });
+            });
+        }
     };
     
     obj.handleAdminReq = function(req, res, user) {
@@ -248,7 +256,11 @@ module.exports.innovoscripttask = function (parent) {
     obj.variableData = function (message) {
         if (typeof pluginHandler.innovoscripttask.loadVariables == 'function') pluginHandler.innovoscripttask.loadVariables(message);
     };
-    
+
+    obj.metaData = function (message) {
+        if (typeof pluginHandler.innovoscripttask.loadMeta == 'function') pluginHandler.innovoscripttask.loadMeta(message);
+    };
+
     obj.determineNextJobTime = function(s) {
         var nextTime = null;
         var nowTime = Math.floor(new Date() / 1000);
@@ -441,7 +453,7 @@ module.exports.innovoscripttask = function (parent) {
     obj.serveraction = function(command, myparent, grandparent) {
         switch (command.pluginaction) {
             case 'addScript':
-                obj.db.addScript(command.name, command.content, command.path, command.filetype, command.description, command.category)
+                obj.db.addScript(command.name, command.content, command.path, command.filetype, command.description, command.category, command.tags)
                 .then(() => {
                     obj.updateFrontEnd( { tree: true } );
                 });            
@@ -693,6 +705,7 @@ module.exports.innovoscripttask = function (parent) {
                 var updateFields = { type: command.scriptType, name: command.scriptName, content: command.scriptContent };
                 if (command.scriptDescription !== undefined) updateFields.description = command.scriptDescription;
                 if (command.scriptCategory !== undefined) updateFields.category = command.scriptCategory;
+                if (command.scriptTags !== undefined) updateFields.tags = Array.isArray(command.scriptTags) ? command.scriptTags : [];
                 obj.db.update(command.scriptId, updateFields)
                 .then(() => {
                     obj.updateFrontEnd( { scriptId: command.scriptId, tree: true } );
@@ -726,6 +739,21 @@ module.exports.innovoscripttask = function (parent) {
                 .then(() => {
                     obj.updateFrontEnd( { variables: true } );
                 })
+            break;
+            case 'loadMeta':
+                obj.updateFrontEnd( { meta: true } );
+            break;
+            case 'addMeta':
+                obj.db.addMeta(command.metaType, command.name, command.color)
+                .then(() => { obj.updateFrontEnd( { meta: true, tree: true } ); });
+            break;
+            case 'renameMeta':
+                obj.db.renameMeta(command.id, command.metaType, command.name, command.color)
+                .then(() => { obj.updateFrontEnd( { meta: true, tree: true } ); });
+            break;
+            case 'deleteMeta':
+                obj.db.deleteMeta(command.id)
+                .then(() => { obj.updateFrontEnd( { meta: true, tree: true } ); });
             break;
             default:
                 console.log('PLUGIN: InnovoScriptTask: unknown action');
