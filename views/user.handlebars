@@ -334,9 +334,10 @@
           <div id="multiRun" class="infoContent">
               <div id="arFilterBar">
                 <input type="text" id="arNodeSearch" placeholder="Filter nodes by name, IP, type..." oninput="filterAdvancedRun();" />
-                <select id="arDeviceFilter" onchange="filterAdvancedRun();">
-                  <option value="">All Types</option>
-                </select>
+                <select id="arDeviceFilter" onchange="filterAdvancedRun();"><option value="">All Types</option></select>
+                <select id="arDpFilter" onchange="filterAdvancedRun();"><option value="">All DietPi</option></select>
+                <select id="arHaFilter" onchange="filterAdvancedRun();"><option value="">All HA</option></select>
+                <select id="arPatchFilter" onchange="filterAdvancedRun();"><option value="">All Patch</option></select>
                 <button class="arBtnSm" onclick="selVisibleNodes(true);">Select Visible</button>
                 <button class="arBtnSm" onclick="selVisibleNodes(false);">Deselect Visible</button>
                 <button onclick="goAdvancedRun();">Run / Schedule</button>
@@ -357,6 +358,10 @@
                 <div>
                   <div class="arColTitle">Device Type</div>
                   <div id="arTypeList"></div>
+                </div>
+                <div>
+                  <div class="arColTitle">Versions</div>
+                  <div id="arVersionList"></div>
                 </div>
               </div>
               <!-- Hidden table for backwards compat with checkbox queries -->
@@ -494,8 +499,9 @@ function updateNodesTable() {
   var nodeList = Q('arNodeList'); nodeList.innerHTML = '';
   var meshList = Q('arMeshList'); meshList.innerHTML = '';
   var typeList = Q('arTypeList'); typeList.innerHTML = '';
+  var versionList = Q('arVersionList'); versionList.innerHTML = '';
   var hiddenTbl = Q('mRunTbl'); hiddenTbl.innerHTML = '';
-  var deviceTypes = {};
+  var deviceTypes = {}, dpVersions = {}, haVersions = {}, patchLevels = {};
 
   parent.nodes.forEach(function(i) {
       var item = {...i, ...{}};
@@ -511,6 +517,7 @@ function updateNodesTable() {
           if (ti.deviceType) badges += '<span class="arTagBadge">' + escHtml(ti.deviceType.replace('MagicCube','')) + '</span>';
           if (ti.dp) badges += '<span class="arTagBadge">dp ' + escHtml(ti.dp) + '</span>';
           if (ti.ha) badges += '<span class="arTagBadge">ha ' + escHtml(ti.ha) + '</span>';
+          if (ti.patch) badges += '<span class="arTagBadge">p' + escHtml(ti.patch) + '</span>';
           if (ti.ip) badges += '<span class="arNodeInfo">' + escHtml(ti.ip) + '</span>';
 
           // Node checkbox
@@ -520,14 +527,20 @@ function updateNodesTable() {
           lbl.setAttribute('data-mesh', item.meshid);
           lbl.setAttribute('data-type', ti.deviceType);
           lbl.setAttribute('data-ip', ti.ip);
+          lbl.setAttribute('data-dp', ti.dp);
+          lbl.setAttribute('data-ha', ti.ha);
+          lbl.setAttribute('data-patch', ti.patch);
           lbl.innerHTML = '<input type="checkbox" ' + checked + ' name="runOn[]" value="' + item._id + '" onchange="updateSelectedCount();"> ' + escHtml(item.name) + badges;
           nodeList.appendChild(lbl);
 
           // Hidden row for backwards compat
           hiddenTbl.insertAdjacentHTML('beforeend', '<tr><td><input type="checkbox" ' + checked + ' name="runOn[]" value="' + item._id + '"></td></tr>');
 
-          // Collect device types
+          // Collect counts
           if (ti.deviceType) deviceTypes[ti.deviceType] = (deviceTypes[ti.deviceType] || 0) + 1;
+          if (ti.dp) dpVersions[ti.dp] = (dpVersions[ti.dp] || 0) + 1;
+          if (ti.ha) haVersions[ti.ha] = (haVersions[ti.ha] || 0) + 1;
+          if (ti.patch) patchLevels[ti.patch] = (patchLevels[ti.patch] || 0) + 1;
       }
   });
 
@@ -547,15 +560,42 @@ function updateNodesTable() {
   filterSelect.innerHTML = '<option value="">All Types</option>';
   sortedTypes.forEach(function(dt) {
       var shortName = dt.replace('MagicCube', '');
-      // Filter dropdown
-      var opt = document.createElement('option');
-      opt.value = dt; opt.textContent = shortName + ' (' + deviceTypes[dt] + ')';
-      filterSelect.appendChild(opt);
-      // Checkbox
+      filterSelect.appendChild(new Option(shortName + ' (' + deviceTypes[dt] + ')', dt));
       var lbl = document.createElement('label');
       lbl.innerHTML = '<input type="checkbox" onclick="selNodesByType(this);" value="' + dt + '"> ' + escHtml(shortName) + ' <span class="arNodeInfo">(' + deviceTypes[dt] + ')</span>';
       typeList.appendChild(lbl);
   });
+
+  // Version filter dropdowns
+  function populateVersionFilter(selectId, versions, prefix) {
+      var sel = Q(selectId);
+      var first = sel.options[0].text; // preserve "All X" label
+      sel.innerHTML = '';
+      sel.appendChild(new Option(first, ''));
+      Object.keys(versions).sort().forEach(function(v) {
+          sel.appendChild(new Option(prefix + v + ' (' + versions[v] + ')', v));
+      });
+  }
+  populateVersionFilter('arDpFilter', dpVersions, 'dp ');
+  populateVersionFilter('arHaFilter', haVersions, 'ha ');
+  populateVersionFilter('arPatchFilter', patchLevels, 'p');
+
+  // Version checkboxes in sidebar
+  function addVersionCheckboxes(container, versions, dataAttr, prefix) {
+      if (Object.keys(versions).length === 0) return;
+      var hdr = document.createElement('div');
+      hdr.style.cssText = 'font-size:10px;font-weight:700;color:var(--fg3);margin-top:6px;text-transform:uppercase;letter-spacing:0.5px;';
+      hdr.textContent = prefix;
+      container.appendChild(hdr);
+      Object.keys(versions).sort().forEach(function(v) {
+          var lbl = document.createElement('label');
+          lbl.innerHTML = '<input type="checkbox" onclick="selNodesByVersion(this,\'' + dataAttr + '\');" value="' + escHtml(v) + '"> ' + prefix + escHtml(v) + ' <span class="arNodeInfo">(' + versions[v] + ')</span>';
+          container.appendChild(lbl);
+      });
+  }
+  addVersionCheckboxes(versionList, dpVersions, 'data-dp', 'DietPi ');
+  addVersionCheckboxes(versionList, haVersions, 'data-ha', 'HA ');
+  addVersionCheckboxes(versionList, patchLevels, 'data-patch', 'Patch ');
 
   updateSelectedCount();
 }
@@ -563,15 +603,37 @@ function updateNodesTable() {
 function filterAdvancedRun() {
     var query = (Q('arNodeSearch').value || '').toLowerCase();
     var typeFilter = Q('arDeviceFilter').value;
+    var dpFilter = Q('arDpFilter').value;
+    var haFilter = Q('arHaFilter').value;
+    var patchFilter = Q('arPatchFilter').value;
     var nodes = document.querySelectorAll('#arNodeList .arNodeItem');
     nodes.forEach(function(lbl) {
         var name = lbl.getAttribute('data-name') || '';
         var type = lbl.getAttribute('data-type') || '';
         var ip = lbl.getAttribute('data-ip') || '';
+        var dp = lbl.getAttribute('data-dp') || '';
+        var ha = lbl.getAttribute('data-ha') || '';
+        var patch = lbl.getAttribute('data-patch') || '';
         var matchQ = !query || name.indexOf(query) !== -1 || ip.indexOf(query) !== -1 || type.toLowerCase().indexOf(query) !== -1;
         var matchType = !typeFilter || type === typeFilter;
-        lbl.style.display = (matchQ && matchType) ? '' : 'none';
+        var matchDp = !dpFilter || dp === dpFilter;
+        var matchHa = !haFilter || ha === haFilter;
+        var matchPatch = !patchFilter || patch === patchFilter;
+        lbl.style.display = (matchQ && matchType && matchDp && matchHa && matchPatch) ? '' : 'none';
     });
+}
+
+function selNodesByVersion(el, dataAttr) {
+    var ver = el.value;
+    var checked = el.checked;
+    var nodes = document.querySelectorAll('#arNodeList .arNodeItem');
+    nodes.forEach(function(lbl) {
+        if (lbl.getAttribute(dataAttr) === ver) {
+            lbl.querySelector('input[type="checkbox"]').checked = checked;
+        }
+    });
+    syncHiddenCheckboxes();
+    updateSelectedCount();
 }
 
 function selVisibleNodes(checked) {
