@@ -747,6 +747,8 @@ function goRun() {
           var nodeName = parent.currentNode.name || 'this device';
           parent.setDialogMode(2, "Run Script", 3, function() {
               parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'runScript', 'scriptId': scriptId, 'nodes': [ parent.currentNode._id ], 'currentNodeId': parent.currentNode._id });
+              openSection('nodeHistory');
+              openSection('scriptHistory');
           }, 'Run <b>' + escHtml(scriptName) + '</b> on <b>' + escHtml(nodeName) + '</b>?');
       }
     } else {
@@ -788,6 +790,17 @@ function goAdvancedRun() {
   } else {
     parent.setDialogMode(2, "Oops!", 1, null, 'No script has been selected to run on the machines.');
   }
+}
+
+function openSection(sectionId) {
+    var section = Q(sectionId);
+    if (!section) return;
+    var bar = section.previousElementSibling;
+    if (bar && !bar.classList.contains('active')) bar.classList.add('active');
+    section.style.display = 'block';
+    section.style.maxHeight = '300px';
+    section.style.overflowY = 'auto';
+    resizeIframe();
 }
 
 var coll = document.getElementsByClassName("infoBar");
