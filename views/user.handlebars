@@ -262,15 +262,44 @@
     }
     .arBtnSm:hover { border-color: var(--accent); color: var(--accent); }
     #arColumns { display: flex; gap: 0; width: 100%; }
-    #arColumns > div { flex: 1; border-right: 1px solid var(--border); padding: 6px 8px; min-width: 0; }
+    #arColumns > div {
+      border-right: 1px solid var(--border); padding: 6px 8px; min-width: 80px;
+      overflow-y: auto; max-height: 280px; resize: horizontal; overflow-x: hidden;
+    }
+    #arColumns > div:first-child { flex: 2; min-width: 200px; }
+    #arColumns > div:not(:first-child) { flex: 1; }
     #arColumns > div:last-child { border-right: none; }
     #arColumns .arColTitle {
       font-size: 11px; font-weight: 700; text-transform: uppercase;
       letter-spacing: 0.5px; color: var(--fg2); padding-bottom: 4px;
       border-bottom: 1px solid var(--border); margin-bottom: 4px;
+      display: flex; align-items: center; gap: 6px; user-select: none;
     }
+    .arSortBtn {
+      cursor: pointer; font-size: 10px; color: var(--fg3); padding: 0 2px;
+    }
+    .arSortBtn:hover { color: var(--accent); }
+    .arSortBtn.active { color: var(--accent); font-weight: 900; }
     #arColumns label { display: block; font-size: 12px; padding: 2px 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #arColumns label:hover { color: var(--accent); }
+
+    /* ── Device tooltip ──────────────────────────── */
+    #arTooltip {
+      display: none; position: fixed; z-index: 9999;
+      background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 10px 14px;
+      font-size: 12px; max-width: 380px; pointer-events: none;
+      line-height: 1.6;
+    }
+    #arTooltip .ttTitle { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+    #arTooltip .ttRow { display: flex; gap: 6px; }
+    #arTooltip .ttKey { color: var(--fg3); min-width: 60px; font-weight: 600; }
+    #arTooltip .ttVal { color: var(--fg); }
+    #arTooltip .ttTags { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 3px; }
+    #arTooltip .ttTag {
+      font-size: 10px; padding: 1px 6px; border-radius: 8px;
+      background: var(--bg3); color: var(--fg2); font-weight: 600;
+    }
     .arNodeInfo {
       font-size: 10px; color: var(--fg3); margin-left: 4px;
     }
@@ -310,6 +339,7 @@
     body.night .retval-preview::after { background: linear-gradient(transparent, var(--bg)); }
 </style>
 <body onload="doOnLoad();">
+<div id="arTooltip"></div>
 <div id="scriptTaskUser">
   <div id="dropBlock" style="display:none;"><b>&checkmark;</b></div>
   <div id="uploadBar">
@@ -360,7 +390,7 @@
               </div>
               <div id="arColumns">
                 <div>
-                  <div class="arColTitle">Nodes</div>
+                  <div class="arColTitle">Nodes <span class="arSortBtn active" onclick="sortNodes('name',this);">A-Z</span><span class="arSortBtn" onclick="sortNodes('type',this);">Type</span><span class="arSortBtn" onclick="sortNodes('checked',this);">Sel</span></div>
                   <div id="arNodeList"></div>
                 </div>
                 <div>
@@ -765,10 +795,87 @@ function updateSelectedCount() {
     syncHiddenCheckboxes();
 }
 
+// ── Device tooltip on hover ──────────────────────────
+function initNodeTooltips() {
+    var nodeList = Q('arNodeList');
+    var tt = Q('arTooltip');
+    nodeList.addEventListener('mouseover', function(e) {
+        var lbl = e.target.closest('.arNodeItem');
+        if (!lbl) { tt.style.display = 'none'; return; }
+        var nodeId = lbl.querySelector('input[name="runOn[]"]');
+        if (!nodeId) return;
+        var node = nodesObj[nodeId.value];
+        if (!node) return;
+        var ti = node._parsedTags || {};
+        var html = '<div class="ttTitle">' + escHtml(node.name) + '</div>';
+        if (node.meshName) html += '<div class="ttRow"><span class="ttKey">Mesh:</span><span class="ttVal">' + escHtml(node.meshName) + '</span></div>';
+        if (ti.ip) html += '<div class="ttRow"><span class="ttKey">IP:</span><span class="ttVal">' + escHtml(ti.ip) + '</span></div>';
+        if (ti.mac) html += '<div class="ttRow"><span class="ttKey">MAC:</span><span class="ttVal">' + escHtml(ti.mac) + '</span></div>';
+        if (ti.deviceType) html += '<div class="ttRow"><span class="ttKey">Type:</span><span class="ttVal">' + escHtml(ti.deviceType) + '</span></div>';
+        // All kv pairs
+        for (var k in (ti.kv || {})) {
+            if (ti.kv[k]) html += '<div class="ttRow"><span class="ttKey">' + escHtml(k) + ':</span><span class="ttVal">' + escHtml(ti.kv[k]) + '</span></div>';
+        }
+        // Labels
+        if (ti.labels && ti.labels.length > 1) {
+            html += '<div class="ttTags">';
+            ti.labels.forEach(function(l) { html += '<span class="ttTag">' + escHtml(l) + '</span>'; });
+            html += '</div>';
+        }
+        // Raw tags for reference
+        if (ti.raw && ti.raw.length) {
+            html += '<div style="margin-top:6px;font-size:10px;color:var(--fg3);">Raw: ' + escHtml(ti.raw.join(', ')) + '</div>';
+        }
+        tt.innerHTML = html;
+        tt.style.display = 'block';
+    });
+    nodeList.addEventListener('mousemove', function(e) {
+        var tt = Q('arTooltip');
+        if (tt.style.display === 'block') {
+            var x = e.clientX + 15, y = e.clientY + 10;
+            // Keep tooltip in viewport
+            if (x + 390 > window.innerWidth) x = e.clientX - 395;
+            if (y + tt.offsetHeight > window.innerHeight) y = e.clientY - tt.offsetHeight - 10;
+            tt.style.left = x + 'px';
+            tt.style.top = y + 'px';
+        }
+    });
+    nodeList.addEventListener('mouseleave', function() { tt.style.display = 'none'; });
+}
+
+// ── Sort nodes (preserves checkboxes) ────────────────
+function sortNodes(by, btnEl) {
+    // Update active button
+    document.querySelectorAll('.arSortBtn').forEach(function(b) { b.classList.remove('active'); });
+    if (btnEl) btnEl.classList.add('active');
+    var nodeList = Q('arNodeList');
+    var items = Array.from(nodeList.querySelectorAll('.arNodeItem'));
+    items.sort(function(a, b) {
+        if (by === 'checked') {
+            var ac = a.querySelector('input').checked ? 0 : 1;
+            var bc = b.querySelector('input').checked ? 0 : 1;
+            if (ac !== bc) return ac - bc;
+            // Secondary sort by name
+            return (a.getAttribute('data-name') || '').localeCompare(b.getAttribute('data-name') || '');
+        }
+        if (by === 'type') {
+            var at = a.getAttribute('data-type') || 'zzz';
+            var bt = b.getAttribute('data-type') || 'zzz';
+            if (at !== bt) return at.localeCompare(bt);
+            return (a.getAttribute('data-name') || '').localeCompare(b.getAttribute('data-name') || '');
+        }
+        // Default: name
+        return (a.getAttribute('data-name') || '').localeCompare(b.getAttribute('data-name') || '');
+    });
+    // Re-append in sorted order (preserves DOM state including checkboxes)
+    items.forEach(function(item) { nodeList.appendChild(item); });
+}
+
 function doOnLoad() {
   redrawScriptTree();
   selectPreviouslySelectedScript();
   updateNodesTable();
+  initNodeTooltips();
   parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadNodeHistory', 'nodeId': parent.currentNode._id });
   parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadVariables', 'nodeId': parent.currentNode._id });
   parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadMeta' });
