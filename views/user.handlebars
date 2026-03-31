@@ -261,6 +261,18 @@
       cursor: pointer; white-space: nowrap;
     }
     .arBtnSm:hover { border-color: var(--accent); color: var(--accent); }
+    .arFilterPills { display: flex; gap: 2px; }
+    .arPill {
+      padding: 4px 10px; font-size: 11px; font-weight: 600; border-radius: 12px;
+      border: 1px solid var(--border2); background: var(--bg); color: var(--fg2);
+      cursor: pointer; white-space: nowrap; transition: all var(--transition);
+    }
+    .arPill:hover { border-color: var(--accent); color: var(--accent); }
+    .arPill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .arPill .pillCount { font-size: 10px; opacity: 0.7; margin-left: 3px; }
+    .arOnlineDot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 3px; }
+    .arOnlineDot.online { background: var(--green); }
+    .arOnlineDot.offline { background: var(--red); }
     #arColumns { display: flex; gap: 0; width: 100%; }
     #arColumns > div {
       border-right: 1px solid var(--border); padding: 6px 8px; min-width: 80px;
@@ -376,6 +388,15 @@
       <div id="history">
           <div class="infoBar">Advanced Run</div>
           <div id="multiRun" class="infoContent">
+              <div style="padding: 6px 12px; border-bottom: 1px solid var(--border); display:flex; align-items:center; gap:8px;">
+                <div class="arFilterPills" id="arStatusPills">
+                  <span class="arPill active" data-filter="all" onclick="setStatusFilter(this);">All <span class="pillCount" id="pillAll"></span></span>
+                  <span class="arPill" data-filter="online" onclick="setStatusFilter(this);">Online <span class="pillCount" id="pillOnline"></span></span>
+                  <span class="arPill" data-filter="offline" onclick="setStatusFilter(this);">Offline <span class="pillCount" id="pillOffline"></span></span>
+                  <span class="arPill" data-filter="tagged" onclick="setStatusFilter(this);">Tagged <span class="pillCount" id="pillTagged"></span></span>
+                  <span class="arPill" data-filter="untagged" onclick="setStatusFilter(this);">Untagged <span class="pillCount" id="pillUntagged"></span></span>
+                </div>
+              </div>
               <div id="arFilterBar">
                 <input type="text" id="arNodeSearch" placeholder="Filter nodes by name, IP, type..." oninput="filterAdvancedRun();" />
                 <select id="arDeviceFilter" onchange="filterAdvancedRun();"><option value="">All Types</option></select>
@@ -600,6 +621,7 @@ function updateNodesTable() {
   var hiddenTbl = Q('mRunTbl'); hiddenTbl.innerHTML = '';
   var deviceTypes = {};
   var kvCounts = {}; // { key: { value: count } }
+  var statusCounts = { all: 0, online: 0, offline: 0, tagged: 0, untagged: 0 };
 
   parent.nodes.forEach(function(i) {
       var item = {...i, ...{}};
@@ -608,9 +630,17 @@ function updateNodesTable() {
           var checked = (item._id == parent.currentNode._id) ? 'checked' : '';
           var ti = parseTags(item.tags);
           item._parsedTags = ti;
+          var isOnline = (item.conn && item.conn > 0);
+          var hasDeviceTags = (item.tags && item.tags.length > 0);
           nodesObj[i._id] = item;
 
+          // Status counts
+          statusCounts.all++;
+          if (isOnline) statusCounts.online++; else statusCounts.offline++;
+          if (hasDeviceTags) statusCounts.tagged++; else statusCounts.untagged++;
+
           // Build info badges from kv pairs
+          var onlineDot = '<span class="arOnlineDot ' + (isOnline ? 'online' : 'offline') + '"></span>';
           var badges = '';
           if (ti.deviceType) badges += '<span class="arTagBadge">' + escHtml(ti.deviceType) + '</span>';
           for (var k in ti.kv) {
@@ -618,15 +648,17 @@ function updateNodesTable() {
           }
           if (ti.ip) badges += '<span class="arNodeInfo">' + escHtml(ti.ip) + '</span>';
 
-          // Node checkbox — store all kv as data attributes
+          // Node checkbox — store all kv + status as data attributes
           var lbl = document.createElement('label');
           lbl.className = 'arNodeItem';
           lbl.setAttribute('data-name', item.name.toLowerCase());
           lbl.setAttribute('data-mesh', item.meshid);
           lbl.setAttribute('data-type', ti.deviceType);
           lbl.setAttribute('data-ip', ti.ip);
+          lbl.setAttribute('data-online', isOnline ? '1' : '0');
+          lbl.setAttribute('data-tagged', hasDeviceTags ? '1' : '0');
           for (var k in ti.kv) { lbl.setAttribute('data-kv-' + k, ti.kv[k]); }
-          lbl.innerHTML = '<input type="checkbox" ' + checked + ' name="runOn[]" value="' + item._id + '" onchange="updateSelectedCount();"> ' + escHtml(item.name) + badges;
+          lbl.innerHTML = '<input type="checkbox" ' + checked + ' name="runOn[]" value="' + item._id + '" onchange="updateSelectedCount();"> ' + onlineDot + escHtml(item.name) + badges;
           nodeList.appendChild(lbl);
 
           hiddenTbl.insertAdjacentHTML('beforeend', '<tr><td><input type="checkbox" ' + checked + ' name="runOn[]" value="' + item._id + '"></td></tr>');
@@ -641,6 +673,13 @@ function updateNodesTable() {
           }
       }
   });
+
+  // Update pill counts
+  Q('pillAll').textContent = statusCounts.all;
+  Q('pillOnline').textContent = statusCounts.online;
+  Q('pillOffline').textContent = statusCounts.offline;
+  Q('pillTagged').textContent = statusCounts.tagged;
+  Q('pillUntagged').textContent = statusCounts.untagged;
 
   // Meshes
   for (const i in parent.meshes) {
@@ -696,6 +735,15 @@ function updateNodesTable() {
   updateSelectedCount();
 }
 
+var arStatusFilter = 'all';
+
+function setStatusFilter(el) {
+    arStatusFilter = el.getAttribute('data-filter');
+    document.querySelectorAll('#arStatusPills .arPill').forEach(function(p) { p.classList.remove('active'); });
+    el.classList.add('active');
+    filterAdvancedRun();
+}
+
 function filterAdvancedRun() {
     var query = (Q('arNodeSearch').value || '').toLowerCase();
     var typeFilter = Q('arDeviceFilter').value;
@@ -710,13 +758,21 @@ function filterAdvancedRun() {
         var name = lbl.getAttribute('data-name') || '';
         var type = lbl.getAttribute('data-type') || '';
         var ip = lbl.getAttribute('data-ip') || '';
+        var isOnline = lbl.getAttribute('data-online') === '1';
+        var isTagged = lbl.getAttribute('data-tagged') === '1';
+        // Status pill filter
+        var matchStatus = true;
+        if (arStatusFilter === 'online') matchStatus = isOnline;
+        else if (arStatusFilter === 'offline') matchStatus = !isOnline;
+        else if (arStatusFilter === 'tagged') matchStatus = isTagged;
+        else if (arStatusFilter === 'untagged') matchStatus = !isTagged;
         var matchQ = !query || name.indexOf(query) !== -1 || ip.indexOf(query) !== -1 || type.toLowerCase().indexOf(query) !== -1;
         var matchType = !typeFilter || type === typeFilter;
         var matchKv = true;
         for (var k in kvFilters) {
             if ((lbl.getAttribute('data-kv-' + k) || '') !== kvFilters[k]) { matchKv = false; break; }
         }
-        lbl.style.display = (matchQ && matchType && matchKv) ? '' : 'none';
+        lbl.style.display = (matchStatus && matchQ && matchType && matchKv) ? '' : 'none';
     });
 }
 
@@ -1095,12 +1151,26 @@ function redrawScriptTree() {
       if (nh.errorVal != null) { nh.statusTxt = 'Error'; nh.statusClass = 'error'; }
       if (nh.returnVal != null) { nh.statusTxt = 'Completed'; nh.statusClass = 'completed'; }
       if (nh.dontQueueUntil > nowTime) { nh.statusTxt = 'Scheduled'; nh.statusClass = 'scheduled'; }
+      // Enhance queued status with device online/offline info
+      if (nh.statusClass === 'queued' && nh.node) {
+          var nodeOnline = false;
+          try {
+              var nodeObj = parent.nodes.filter(function(n) { return n._id === nh.node; })[0];
+              if (nodeObj && nodeObj.conn && nodeObj.conn > 0) nodeOnline = true;
+          } catch(e) {}
+          if (!nodeOnline) {
+              nh.statusTxt = 'Queued';
+              nh.statusClass = 'queued';
+              nh.statusSubtxt = 'device offline';
+          }
+      }
       if (nh.returnTxt == null) nh.returnTxt = '&nbsp;';
       var durationHtml = '';
       if (nh.statusClass == 'completed' && nh.completeTime && nh.dispatchTime) {
           durationHtml = ' <span style="font-size:10px;color:var(--fg3)">(' + secondsToHms((nh.completeTime - nh.dispatchTime)) + ')</span>';
       }
-      nh.statusHtml = '<span class="st-badge ' + nh.statusClass + '">' + nh.statusTxt + '</span>' + durationHtml;
+      var subtxtHtml = nh.statusSubtxt ? '<br/><span style="font-size:9px;color:var(--red);">' + nh.statusSubtxt + '</span>' : '';
+      nh.statusHtml = '<span class="st-badge ' + nh.statusClass + '">' + nh.statusTxt + '</span>' + durationHtml + subtxtHtml;
       if (isJsonString(nh.returnTxt)) {
           try {
               nh.returnObj = JSON.parse(nh.returnTxt);
