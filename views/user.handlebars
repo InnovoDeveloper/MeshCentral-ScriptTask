@@ -10,9 +10,6 @@
       --accent: #2563eb; --accent-hover: #1d4ed8;
       --green: #16a34a; --red: #dc2626; --yellow: #d97706; --gray: #6b7280;
       --folder-bg: #f0f4ff; --selected-bg: #dbeafe;
-      --cat-v1: #3b82f6; --cat-v2: #10b981; --cat-aura: #8b5cf6;
-      --cat-knx: #f59e0b; --cat-maint: #6b7280; --cat-diag: #06b6d4;
-      --cat-patch: #ef4444;
       --radius: 6px; --radius-sm: 4px;
       --shadow: 0 1px 3px rgba(0,0,0,0.08);
       --transition: 0.15s ease;
@@ -112,13 +109,7 @@
       font-size: 10px; padding: 1px 6px; border-radius: 10px;
       color: #fff; font-weight: 600; letter-spacing: 0.3px;
     }
-    .catBadge[data-cat="V1"]          { background: var(--cat-v1); }
-    .catBadge[data-cat="V2"]          { background: var(--cat-v2); }
-    .catBadge[data-cat="Aura"]        { background: var(--cat-aura); }
-    .catBadge[data-cat="KNX"]         { background: var(--cat-knx); }
-    .catBadge[data-cat="Maintenance"] { background: var(--cat-maint); }
-    .catBadge[data-cat="Diagnostics"] { background: var(--cat-diag); }
-    .catBadge[data-cat="Patching"]    { background: var(--cat-patch); }
+    /* Category badge colors are applied dynamically via inline style from DB */
     .scriptDesc {
       font-size: 11px; color: var(--fg3); padding: 0 8px 4px 38px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
