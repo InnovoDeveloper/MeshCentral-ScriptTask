@@ -292,20 +292,7 @@ module.exports.CreateDB = function(meshserver) {
               if (found.length == 0) obj.addFolder('Shared', 'Shared');
             })
             .catch(e => { console.log('PLUGIN: InnovoScriptTask: Default folder check failed. Error was: ', e); });
-            // Seed default categories if none exist
-            obj.scriptFile.find({ type: 'meta', metaType: 'category' }).toArray()
-            .then(found => {
-                if (found.length == 0) {
-                    var defaults = [
-                        { name: 'V1', color: '#3b82f6' }, { name: 'V2', color: '#10b981' },
-                        { name: 'Aura', color: '#8b5cf6' }, { name: 'KNX', color: '#f59e0b' },
-                        { name: 'Maintenance', color: '#6b7280' }, { name: 'Diagnostics', color: '#06b6d4' },
-                        { name: 'Patching', color: '#ef4444' }
-                    ];
-                    defaults.forEach(d => obj.addMeta('category', d.name, d.color));
-                }
-            })
-            .catch(e => {});
+            // No default categories seeded — manage via the UI
         };
 
         obj.checkDefaults();
