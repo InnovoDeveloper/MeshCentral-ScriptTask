@@ -743,7 +743,11 @@ function goRun() {
       if (scriptId == selScript[0].getAttribute('x-folder-id')) {
           parent.setDialogMode(2, "Oops!", 1, null, 'Please select a script. A folder is currently selected.');
       } else {
-          parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'runScript', 'scriptId': scriptId, 'nodes': [ parent.currentNode._id ], 'currentNodeId': parent.currentNode._id });
+          var scriptName = (selScript[0].querySelector('.fname') || {}).textContent || 'script';
+          var nodeName = parent.currentNode.name || 'this device';
+          parent.setDialogMode(2, "Run Script", 3, function() {
+              parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'runScript', 'scriptId': scriptId, 'nodes': [ parent.currentNode._id ], 'currentNodeId': parent.currentNode._id });
+          }, 'Run <b>' + escHtml(scriptName) + '</b> on <b>' + escHtml(nodeName) + '</b>?');
       }
     } else {
         parent.setDialogMode(2, "Oops!", 1, null, 'No script has been selected to run on the machines.');
@@ -1188,9 +1192,12 @@ function redrawScriptTree() {
     var els = document.querySelectorAll('.liselected');
     if (els.length == 0) return;
     var el = els[0];
-    var name = el.innerHTML;
+    var fname = (el.querySelector('.fname') || {}).textContent || 'this item';
+    var isFolder = el.getAttribute('x-data-id') === el.getAttribute('x-data-folder');
     var id = el.getAttribute('x-data-id');
-    parent.setDialogMode(2, "Delete " + name, 3, deleteEx, 'Are you sure? <input type="hidden" id="stdelid" value="' + id + '" />');
+    var msg = 'Are you sure you want to delete <b>' + escHtml(fname) + '</b>?';
+    if (isFolder) msg += '<br/><span style="color:var(--red)">This will also delete all scripts inside this folder.</span>';
+    parent.setDialogMode(2, "Delete", 3, deleteEx, msg + '<input type="hidden" id="stdelid" value="' + id + '" />');
   }
   function deleteScheduleEx() {
     var id = parent.document.getElementById('stdelid').value;
