@@ -218,6 +218,46 @@
     }
     #multiRun button:hover { background: var(--accent-hover); }
 
+    /* ── Advanced Run layout ─────────────────────── */
+    #arFilterBar {
+      display: flex; gap: 6px; align-items: center; padding: 8px 12px;
+      border-bottom: 1px solid var(--border); background: var(--bg2);
+    }
+    #arNodeSearch {
+      flex: 1; padding: 5px 8px; font-size: 12px;
+      border: 1px solid var(--border2); border-radius: var(--radius);
+      background: var(--bg); color: var(--fg); outline: none;
+    }
+    #arNodeSearch:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+    #arDeviceFilter {
+      padding: 5px 6px; font-size: 12px;
+      border: 1px solid var(--border2); border-radius: var(--radius);
+      background: var(--bg); color: var(--fg); outline: none;
+    }
+    .arBtnSm {
+      padding: 4px 10px; font-size: 11px; font-weight: 600; border-radius: var(--radius);
+      border: 1px solid var(--border2); background: var(--bg); color: var(--fg);
+      cursor: pointer; white-space: nowrap;
+    }
+    .arBtnSm:hover { border-color: var(--accent); color: var(--accent); }
+    #arColumns { display: flex; gap: 0; width: 100%; }
+    #arColumns > div { flex: 1; border-right: 1px solid var(--border); padding: 6px 8px; min-width: 0; }
+    #arColumns > div:last-child { border-right: none; }
+    #arColumns .arColTitle {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; color: var(--fg2); padding-bottom: 4px;
+      border-bottom: 1px solid var(--border); margin-bottom: 4px;
+    }
+    #arColumns label { display: block; font-size: 12px; padding: 2px 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #arColumns label:hover { color: var(--accent); }
+    .arNodeInfo {
+      font-size: 10px; color: var(--fg3); margin-left: 4px;
+    }
+    .arTagBadge {
+      display: inline-block; font-size: 9px; padding: 0 4px; border-radius: 3px;
+      background: var(--bg3); color: var(--fg2); margin-left: 3px; font-weight: 600;
+    }
+
     /* ── Dark / Night mode ────────────────────────── */
     @media (prefers-color-scheme: dark) {
       :root {
@@ -292,22 +332,35 @@
       <div id="history">
           <div class="infoBar">Advanced Run</div>
           <div id="multiRun" class="infoContent">
-              <div style="padding: 12px;"><button onclick="goAdvancedRun();">Schedule on Selected</button></div>
-              <div class="tblFloat">
-                  <table id="mRunTbl" cellspacing="0" cellpadding="0">
-                      <tr><td><label><input type="checkbox" onclick="selAllNodes(this);"> Select All</label></td></tr>
-                  </table>
+              <div id="arFilterBar">
+                <input type="text" id="arNodeSearch" placeholder="Filter nodes by name, IP, type..." oninput="filterAdvancedRun();" />
+                <select id="arDeviceFilter" onchange="filterAdvancedRun();">
+                  <option value="">All Types</option>
+                </select>
+                <button class="arBtnSm" onclick="selVisibleNodes(true);">Select Visible</button>
+                <button class="arBtnSm" onclick="selVisibleNodes(false);">Deselect Visible</button>
+                <button onclick="goAdvancedRun();">Run / Schedule</button>
               </div>
-              <div class="tblFloat">
-                  <table id="mRunTblMesh" cellspacing="0" cellpadding="0">
-                      <tr><td><strong>Meshes</strong></td></tr>
-                  </table>
+              <div style="padding: 4px 12px; font-size: 11px; color: var(--fg3);">
+                <label style="display:inline;"><input type="checkbox" onclick="selAllNodes(this);"> Select All</label>
+                <span id="arSelectedCount" style="margin-left: 12px;">0 selected</span>
               </div>
-              <div class="tblFloat">
-                  <table id="mRunTblTag" cellspacing="0" cellpadding="0">
-                      <tr><td><strong>Tags</strong></td></tr>
-                  </table>
+              <div id="arColumns">
+                <div>
+                  <div class="arColTitle">Nodes</div>
+                  <div id="arNodeList"></div>
+                </div>
+                <div>
+                  <div class="arColTitle">Meshes</div>
+                  <div id="arMeshList"></div>
+                </div>
+                <div>
+                  <div class="arColTitle">Device Type</div>
+                  <div id="arTypeList"></div>
+                </div>
               </div>
+              <!-- Hidden table for backwards compat with checkbox queries -->
+              <table id="mRunTbl" style="display:none;" cellspacing="0" cellpadding="0"></table>
           </div>
           <div class="infoBar">Node Schedules</div>
           <div id="nSch" class="infoContent">
@@ -422,64 +475,165 @@ function updateScriptInfoCard(el) {
     Q('siDesc').textContent = desc || 'No description';
     card.style.display = '';
 }
+// Parse raw tags into structured info
+function parseTags(tags) {
+    var info = { deviceType: '', dp: '', ha: '', patch: '', ip: '', mac: '', raw: tags || [] };
+    if (!tags || !tags.length) return info;
+    tags.forEach(function(t) {
+        if (/^MagicCube/i.test(t)) info.deviceType = t;
+        else if (/^dp-\s/i.test(t)) info.dp = t.replace(/^dp-\s*/i, '');
+        else if (/^ha-\s/i.test(t)) info.ha = t.replace(/^ha-\s*/i, '');
+        else if (/^p-\s/i.test(t)) info.patch = t.replace(/^p-\s*/i, '');
+        else if (/^\d+\.\d+\.\d+\.\d+$/.test(t)) info.ip = t;
+        else if (/^[0-9a-f]{2}:[0-9a-f]{2}:/i.test(t)) info.mac = t;
+    });
+    return info;
+}
+
 function updateNodesTable() {
-  let dRows = document.querySelectorAll('.stNodeRow');
-  dRows.forEach((r) => { r.parentNode.removeChild(r); });
-  var tagList = [];
-  var nodeRowIns = document.querySelector('#mRunTbl');
+  var nodeList = Q('arNodeList'); nodeList.innerHTML = '';
+  var meshList = Q('arMeshList'); meshList.innerHTML = '';
+  var typeList = Q('arTypeList'); typeList.innerHTML = '';
+  var hiddenTbl = Q('mRunTbl'); hiddenTbl.innerHTML = '';
+  var deviceTypes = {};
+
   parent.nodes.forEach(function(i) {
       var item = {...i, ...{}};
       if (item.mtype == 2) {
-          item.meshName = parent.meshes[item['meshid']].name;
-          if (item._id == parent.currentNode._id) item.checked = 'checked '; else item.checked = '';
-          let tpl = `<tr class="stNodeRow">
-            <td><label><input type="checkbox" ${item.checked} name="runOn[]" value="${item._id}"> <div class="nIcon j${item.icon}"></div>${item.name}</label></td>
-          </tr>`;
-          nodeRowIns.insertAdjacentHTML('beforeend', tpl);
-          if (i.tags && i.tags.length) item.tags.forEach(function(t) { tagList.push(t) });
-          nodesObj[i._id] = i;
+          item.meshName = parent.meshes[item['meshid']] ? parent.meshes[item['meshid']].name : '';
+          var checked = (item._id == parent.currentNode._id) ? 'checked' : '';
+          var ti = parseTags(item.tags);
+          item._parsedTags = ti;
+          nodesObj[i._id] = item;
+
+          // Build info badges
+          var badges = '';
+          if (ti.deviceType) badges += '<span class="arTagBadge">' + escHtml(ti.deviceType.replace('MagicCube','')) + '</span>';
+          if (ti.dp) badges += '<span class="arTagBadge">dp ' + escHtml(ti.dp) + '</span>';
+          if (ti.ha) badges += '<span class="arTagBadge">ha ' + escHtml(ti.ha) + '</span>';
+          if (ti.ip) badges += '<span class="arNodeInfo">' + escHtml(ti.ip) + '</span>';
+
+          // Node checkbox
+          var lbl = document.createElement('label');
+          lbl.className = 'arNodeItem';
+          lbl.setAttribute('data-name', item.name.toLowerCase());
+          lbl.setAttribute('data-mesh', item.meshid);
+          lbl.setAttribute('data-type', ti.deviceType);
+          lbl.setAttribute('data-ip', ti.ip);
+          lbl.innerHTML = '<input type="checkbox" ' + checked + ' name="runOn[]" value="' + item._id + '" onchange="updateSelectedCount();"> ' + escHtml(item.name) + badges;
+          nodeList.appendChild(lbl);
+
+          // Hidden row for backwards compat
+          hiddenTbl.insertAdjacentHTML('beforeend', '<tr><td><input type="checkbox" ' + checked + ' name="runOn[]" value="' + item._id + '"></td></tr>');
+
+          // Collect device types
+          if (ti.deviceType) deviceTypes[ti.deviceType] = (deviceTypes[ti.deviceType] || 0) + 1;
       }
   });
-  tagList = tagList.filter(onlyUnique); tagList = tagList.sort();
-  var nodeRowIns = document.querySelector('#mRunTblMesh');
+
+  // Meshes
   for (const i in parent.meshes) {
-      var item = {...parent.meshes[i], ...{}};
+      var item = parent.meshes[i];
       if (item.mtype == 2) {
-          let tpl = `<tr class="stNodeRow">
-            <td><label><input type="checkbox" onclick="selNodesByMesh(this);" value="${item._id}"> ${item.name}</label></td>
-          </tr>`;
-          nodeRowIns.insertAdjacentHTML('beforeend', tpl);
+          var lbl = document.createElement('label');
+          lbl.innerHTML = '<input type="checkbox" onclick="selNodesByMesh(this);" value="' + item._id + '"> ' + escHtml(item.name);
+          meshList.appendChild(lbl);
       }
   }
-  var nodeRowIns = document.querySelector('#mRunTblTag');
-  tagList.forEach(function(i) {
-      let tpl = `<tr class="stNodeRow">
-        <td><label><input type="checkbox" onclick="selNodesByTag(this)" value="${i}"> ${i}</label></td>
-      </tr>`;
-      nodeRowIns.insertAdjacentHTML('beforeend', tpl);
+
+  // Device types
+  var sortedTypes = Object.keys(deviceTypes).sort();
+  var filterSelect = Q('arDeviceFilter');
+  filterSelect.innerHTML = '<option value="">All Types</option>';
+  sortedTypes.forEach(function(dt) {
+      var shortName = dt.replace('MagicCube', '');
+      // Filter dropdown
+      var opt = document.createElement('option');
+      opt.value = dt; opt.textContent = shortName + ' (' + deviceTypes[dt] + ')';
+      filterSelect.appendChild(opt);
+      // Checkbox
+      var lbl = document.createElement('label');
+      lbl.innerHTML = '<input type="checkbox" onclick="selNodesByType(this);" value="' + dt + '"> ' + escHtml(shortName) + ' <span class="arNodeInfo">(' + deviceTypes[dt] + ')</span>';
+      typeList.appendChild(lbl);
   });
+
+  updateSelectedCount();
 }
 
-function selNodesByTag(el) {
-    var t = el.value;
-    var allNodes = Q('mRunTbl').querySelectorAll('input[type="checkbox"][name="runOn[]"]');
-    var checked = el.checked;
-    allNodes.forEach(function(n) {
-        if (nodesObj[n.value].tags && nodesObj[n.value].tags.indexOf(t) > -1) n.checked = checked;
+function filterAdvancedRun() {
+    var query = (Q('arNodeSearch').value || '').toLowerCase();
+    var typeFilter = Q('arDeviceFilter').value;
+    var nodes = document.querySelectorAll('#arNodeList .arNodeItem');
+    nodes.forEach(function(lbl) {
+        var name = lbl.getAttribute('data-name') || '';
+        var type = lbl.getAttribute('data-type') || '';
+        var ip = lbl.getAttribute('data-ip') || '';
+        var matchQ = !query || name.indexOf(query) !== -1 || ip.indexOf(query) !== -1 || type.toLowerCase().indexOf(query) !== -1;
+        var matchType = !typeFilter || type === typeFilter;
+        lbl.style.display = (matchQ && matchType) ? '' : 'none';
     });
 }
+
+function selVisibleNodes(checked) {
+    var nodes = document.querySelectorAll('#arNodeList .arNodeItem');
+    nodes.forEach(function(lbl) {
+        if (lbl.style.display !== 'none') {
+            var cb = lbl.querySelector('input[type="checkbox"]');
+            if (cb) cb.checked = checked;
+        }
+    });
+    syncHiddenCheckboxes();
+    updateSelectedCount();
+}
+
+function selNodesByType(el) {
+    var dtype = el.value;
+    var checked = el.checked;
+    var nodes = document.querySelectorAll('#arNodeList .arNodeItem');
+    nodes.forEach(function(lbl) {
+        if (lbl.getAttribute('data-type') === dtype) {
+            lbl.querySelector('input[type="checkbox"]').checked = checked;
+        }
+    });
+    syncHiddenCheckboxes();
+    updateSelectedCount();
+}
+
 function selNodesByMesh(el) {
     var mid = el.value;
-    var allNodes = Q('mRunTbl').querySelectorAll('input[type="checkbox"][name="runOn[]"]');
     var checked = el.checked;
-    allNodes.forEach(function(n) {
-        if (nodesObj[n.value].meshid == mid) n.checked = checked;
+    var nodes = document.querySelectorAll('#arNodeList .arNodeItem');
+    nodes.forEach(function(lbl) {
+        if (lbl.getAttribute('data-mesh') === mid) {
+            lbl.querySelector('input[type="checkbox"]').checked = checked;
+        }
     });
+    syncHiddenCheckboxes();
+    updateSelectedCount();
 }
+
 function selAllNodes(el) {
-  var allNodes = Q('mRunTbl').querySelectorAll('input[type="checkbox"][name="runOn[]"]');
-  var checked = el.checked;
-  allNodes.forEach(function(n) { n.checked = checked; });
+    var checked = el.checked;
+    var nodes = document.querySelectorAll('#arNodeList input[type="checkbox"]');
+    nodes.forEach(function(cb) { cb.checked = checked; });
+    syncHiddenCheckboxes();
+    updateSelectedCount();
+}
+
+function syncHiddenCheckboxes() {
+    // Keep hidden mRunTbl in sync for goAdvancedRun()
+    var visible = document.querySelectorAll('#arNodeList input[name="runOn[]"]');
+    var hidden = Q('mRunTbl').querySelectorAll('input[name="runOn[]"]');
+    var checkedIds = {};
+    visible.forEach(function(cb) { if (cb.checked) checkedIds[cb.value] = true; });
+    hidden.forEach(function(cb) { cb.checked = !!checkedIds[cb.value]; });
+}
+
+function updateSelectedCount() {
+    var count = document.querySelectorAll('#arNodeList input[name="runOn[]"]:checked').length;
+    var total = document.querySelectorAll('#arNodeList input[name="runOn[]"]').length;
+    Q('arSelectedCount').textContent = count + ' of ' + total + ' selected';
+    syncHiddenCheckboxes();
 }
 
 function doOnLoad() {
@@ -530,7 +684,7 @@ function goEdit() {
 }
 
 function goAdvancedRun() {
-  var cboxes = document.getElementsByName("runOn[]");
+  var cboxes = document.querySelectorAll('#arNodeList input[name="runOn[]"]');
   var sel = [];
   cboxes.forEach((n) => { if (n.checked) sel.push(n.value); });
   if (sel.length == 0) { parent.setDialogMode(2, "Oops!", 1, null, 'No machines have been selected.'); return; }
