@@ -330,13 +330,6 @@
         <input type="text" id="scriptSearch" placeholder="Search scripts..." oninput="filterScriptTree();" />
         <select id="categoryFilter" onchange="filterScriptTree();">
           <option value="">All</option>
-          <option value="V1">V1</option>
-          <option value="V2">V2</option>
-          <option value="Aura">Aura</option>
-          <option value="KNX">KNX</option>
-          <option value="Maintenance">Maintenance</option>
-          <option value="Diagnostics">Diagnostics</option>
-          <option value="Patching">Patching</option>
         </select>
       </div>
       <div id="scriptTreeContent"></div>
@@ -356,11 +349,7 @@
               <div id="arFilterBar">
                 <input type="text" id="arNodeSearch" placeholder="Filter nodes by name, IP, type..." oninput="filterAdvancedRun();" />
                 <select id="arDeviceFilter" onchange="filterAdvancedRun();"><option value="">All Types</option></select>
-                <select id="arDpFilter" onchange="filterAdvancedRun();"><option value="">All DietPi</option></select>
-                <select id="arHaFilter" onchange="filterAdvancedRun();"><option value="">All HA</option></select>
-                <select id="arPatchFilter" onchange="filterAdvancedRun();"><option value="">All Patch</option></select>
-                <select id="arPyFilter" onchange="filterAdvancedRun();"><option value="">All Python</option></select>
-                <select id="arSchemaFilter" onchange="filterAdvancedRun();"><option value="">All Schema</option></select>
+                <span id="arVersionFilters"></span>
                 <button class="arBtnSm" onclick="selVisibleNodes(true);">Select Visible</button>
                 <button class="arBtnSm" onclick="selVisibleNodes(false);">Deselect Visible</button>
                 <button onclick="goAdvancedRun();">Run / Schedule</button>
@@ -537,21 +526,41 @@ function updateScriptInfoCard(el) {
     card.style.display = '';
 }
 // Parse raw tags into structured info
+// Generic tag parser — no hardcoded device names.
+// Recognizes patterns: "key- value" pairs, IPs, MACs, and label strings.
 function parseTags(tags) {
-    var info = { deviceType: '', dp: '', ha: '', patch: '', py: '', schema: '', ip: '', mac: '', raw: tags || [] };
+    var info = { deviceType: '', kv: {}, ip: '', mac: '', labels: [], raw: tags || [] };
     if (!tags || !tags.length) return info;
     tags.forEach(function(t) {
-        if (/^(MagicCube|MagicPro|MC-|MCPlaya)/i.test(t)) info.deviceType = t;
-        else if (/^dp-\s/i.test(t)) info.dp = t.replace(/^dp-\s*/i, '');
-        else if (/^ha-\s/i.test(t)) info.ha = t.replace(/^ha-\s*/i, '');
-        else if (/^p-\s/i.test(t)) info.patch = t.replace(/^p-\s*/i, '');
-        else if (/^py-\s/i.test(t)) info.py = t.replace(/^py-\s*/i, '');
-        else if (/^s-\s/i.test(t)) info.schema = t.replace(/^s-\s*/i, '');
-        else if (/^\d+\.\d+\.\d+\.\d+$/.test(t)) info.ip = t;
-        else if (/^[0-9a-f]{2}:[0-9a-f]{2}:/i.test(t)) info.mac = t;
+        if (!t || !t.trim()) return;
+        t = t.trim();
+        // IP address
+        if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(t)) { info.ip = t; return; }
+        // MAC address
+        if (/^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}/i.test(t)) { info.mac = t; return; }
+        // Key-value pair: "prefix- value" (e.g. "dp- 9.6.1", "ha- 2024.3.3", "p- 4")
+        var kvMatch = t.match(/^([a-z]{1,4})-\s+(.+)$/i);
+        if (kvMatch) { info.kv[kvMatch[1].toLowerCase()] = kvMatch[2]; return; }
+        // Pure number or percentage — skip
+        if (/^\d+%?$/.test(t)) return;
+        // Bare version number (X.X.X) — skip
+        if (/^\d+\.\d+\.\d+$/.test(t)) return;
+        // Everything else is a label — first non-trivial label becomes deviceType
+        if (t.length > 2 && !/^(null|root|undefined)$/i.test(t)) {
+            info.labels.push(t);
+            if (!info.deviceType) info.deviceType = t;
+        }
     });
+    // Convenience aliases from kv pairs
+    info.dp = info.kv['dp'] || '';
+    info.ha = info.kv['ha'] || '';
+    info.patch = info.kv['p'] || '';
+    info.py = info.kv['py'] || '';
+    info.schema = info.kv['s'] || '';
     return info;
 }
+
+var arKvKeys = []; // dynamically discovered kv keys for filtering
 
 function updateNodesTable() {
   var nodeList = Q('arNodeList'); nodeList.innerHTML = '';
@@ -559,7 +568,8 @@ function updateNodesTable() {
   var typeList = Q('arTypeList'); typeList.innerHTML = '';
   var versionList = Q('arVersionList'); versionList.innerHTML = '';
   var hiddenTbl = Q('mRunTbl'); hiddenTbl.innerHTML = '';
-  var deviceTypes = {}, dpVersions = {}, haVersions = {}, patchLevels = {}, pyVersions = {}, schemaVersions = {};
+  var deviceTypes = {};
+  var kvCounts = {}; // { key: { value: count } }
 
   parent.nodes.forEach(function(i) {
       var item = {...i, ...{}};
@@ -570,39 +580,35 @@ function updateNodesTable() {
           item._parsedTags = ti;
           nodesObj[i._id] = item;
 
-          // Build info badges
+          // Build info badges from kv pairs
           var badges = '';
-          if (ti.deviceType) badges += '<span class="arTagBadge">' + escHtml(ti.deviceType.replace(/^MagicCube/,'')) + '</span>';
-          if (ti.dp) badges += '<span class="arTagBadge">dp ' + escHtml(ti.dp) + '</span>';
-          if (ti.ha) badges += '<span class="arTagBadge">ha ' + escHtml(ti.ha) + '</span>';
-          if (ti.patch) badges += '<span class="arTagBadge">p' + escHtml(ti.patch) + '</span>';
+          if (ti.deviceType) badges += '<span class="arTagBadge">' + escHtml(ti.deviceType) + '</span>';
+          for (var k in ti.kv) {
+              if (ti.kv[k] && ti.kv[k] !== '*') badges += '<span class="arTagBadge">' + k + ' ' + escHtml(ti.kv[k]) + '</span>';
+          }
           if (ti.ip) badges += '<span class="arNodeInfo">' + escHtml(ti.ip) + '</span>';
 
-          // Node checkbox
+          // Node checkbox — store all kv as data attributes
           var lbl = document.createElement('label');
           lbl.className = 'arNodeItem';
           lbl.setAttribute('data-name', item.name.toLowerCase());
           lbl.setAttribute('data-mesh', item.meshid);
           lbl.setAttribute('data-type', ti.deviceType);
           lbl.setAttribute('data-ip', ti.ip);
-          lbl.setAttribute('data-dp', ti.dp);
-          lbl.setAttribute('data-ha', ti.ha);
-          lbl.setAttribute('data-patch', ti.patch);
-          lbl.setAttribute('data-py', ti.py);
-          lbl.setAttribute('data-schema', ti.schema);
+          for (var k in ti.kv) { lbl.setAttribute('data-kv-' + k, ti.kv[k]); }
           lbl.innerHTML = '<input type="checkbox" ' + checked + ' name="runOn[]" value="' + item._id + '" onchange="updateSelectedCount();"> ' + escHtml(item.name) + badges;
           nodeList.appendChild(lbl);
 
-          // Hidden row for backwards compat
           hiddenTbl.insertAdjacentHTML('beforeend', '<tr><td><input type="checkbox" ' + checked + ' name="runOn[]" value="' + item._id + '"></td></tr>');
 
           // Collect counts
           if (ti.deviceType) deviceTypes[ti.deviceType] = (deviceTypes[ti.deviceType] || 0) + 1;
-          if (ti.dp) dpVersions[ti.dp] = (dpVersions[ti.dp] || 0) + 1;
-          if (ti.ha) haVersions[ti.ha] = (haVersions[ti.ha] || 0) + 1;
-          if (ti.patch) patchLevels[ti.patch] = (patchLevels[ti.patch] || 0) + 1;
-          if (ti.py && ti.py !== '*') pyVersions[ti.py] = (pyVersions[ti.py] || 0) + 1;
-          if (ti.schema) schemaVersions[ti.schema] = (schemaVersions[ti.schema] || 0) + 1;
+          for (var k in ti.kv) {
+              var v = ti.kv[k];
+              if (!v || v === '*') continue;
+              if (!kvCounts[k]) kvCounts[k] = {};
+              kvCounts[k][v] = (kvCounts[k][v] || 0) + 1;
+          }
       }
   });
 
@@ -621,47 +627,41 @@ function updateNodesTable() {
   var filterSelect = Q('arDeviceFilter');
   filterSelect.innerHTML = '<option value="">All Types</option>';
   sortedTypes.forEach(function(dt) {
-      var shortName = dt.replace('MagicCube', '');
-      filterSelect.appendChild(new Option(shortName + ' (' + deviceTypes[dt] + ')', dt));
+      filterSelect.appendChild(new Option(dt + ' (' + deviceTypes[dt] + ')', dt));
       var lbl = document.createElement('label');
-      lbl.innerHTML = '<input type="checkbox" onclick="selNodesByType(this);" value="' + dt + '"> ' + escHtml(shortName) + ' <span class="arNodeInfo">(' + deviceTypes[dt] + ')</span>';
+      lbl.innerHTML = '<input type="checkbox" onclick="selNodesByType(this);" value="' + dt + '"> ' + escHtml(dt) + ' <span class="arNodeInfo">(' + deviceTypes[dt] + ')</span>';
       typeList.appendChild(lbl);
   });
 
-  // Version filter dropdowns
-  function populateVersionFilter(selectId, versions, prefix) {
-      var sel = Q(selectId);
-      var first = sel.options[0].text; // preserve "All X" label
-      sel.innerHTML = '';
-      sel.appendChild(new Option(first, ''));
-      Object.keys(versions).sort().forEach(function(v) {
-          sel.appendChild(new Option(prefix + v + ' (' + versions[v] + ')', v));
+  // Dynamic version filter dropdowns — one per discovered kv key
+  var vfContainer = Q('arVersionFilters'); vfContainer.innerHTML = '';
+  arKvKeys = Object.keys(kvCounts).sort();
+  arKvKeys.forEach(function(k) {
+      var sel = document.createElement('select');
+      sel.id = 'arKvFilter_' + k;
+      sel.onchange = filterAdvancedRun;
+      sel.style.cssText = 'padding:5px 6px;font-size:12px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--fg);outline:none;';
+      sel.appendChild(new Option('All ' + k, ''));
+      Object.keys(kvCounts[k]).sort().forEach(function(v) {
+          sel.appendChild(new Option(k + ' ' + v + ' (' + kvCounts[k][v] + ')', v));
       });
-  }
-  populateVersionFilter('arDpFilter', dpVersions, 'dp ');
-  populateVersionFilter('arHaFilter', haVersions, 'ha ');
-  populateVersionFilter('arPatchFilter', patchLevels, 'p');
-  populateVersionFilter('arPyFilter', pyVersions, 'py ');
-  populateVersionFilter('arSchemaFilter', schemaVersions, 's');
+      vfContainer.appendChild(sel);
+  });
 
-  // Version checkboxes in sidebar
-  function addVersionCheckboxes(container, versions, dataAttr, prefix) {
+  // Version checkboxes in sidebar — one section per kv key
+  arKvKeys.forEach(function(k) {
+      var versions = kvCounts[k];
       if (Object.keys(versions).length === 0) return;
       var hdr = document.createElement('div');
       hdr.style.cssText = 'font-size:10px;font-weight:700;color:var(--fg3);margin-top:6px;text-transform:uppercase;letter-spacing:0.5px;';
-      hdr.textContent = prefix;
-      container.appendChild(hdr);
+      hdr.textContent = k;
+      versionList.appendChild(hdr);
       Object.keys(versions).sort().forEach(function(v) {
           var lbl = document.createElement('label');
-          lbl.innerHTML = '<input type="checkbox" onclick="selNodesByVersion(this,\'' + dataAttr + '\');" value="' + escHtml(v) + '"> ' + prefix + escHtml(v) + ' <span class="arNodeInfo">(' + versions[v] + ')</span>';
-          container.appendChild(lbl);
+          lbl.innerHTML = '<input type="checkbox" onclick="selNodesByVersion(this,\'data-kv-' + k + '\');" value="' + escHtml(v) + '"> ' + k + ' ' + escHtml(v) + ' <span class="arNodeInfo">(' + versions[v] + ')</span>';
+          versionList.appendChild(lbl);
       });
-  }
-  addVersionCheckboxes(versionList, dpVersions, 'data-dp', 'DietPi ');
-  addVersionCheckboxes(versionList, haVersions, 'data-ha', 'HA ');
-  addVersionCheckboxes(versionList, patchLevels, 'data-patch', 'Patch ');
-  addVersionCheckboxes(versionList, pyVersions, 'data-py', 'Python ');
-  addVersionCheckboxes(versionList, schemaVersions, 'data-schema', 'Schema ');
+  });
 
   updateSelectedCount();
 }
@@ -669,29 +669,24 @@ function updateNodesTable() {
 function filterAdvancedRun() {
     var query = (Q('arNodeSearch').value || '').toLowerCase();
     var typeFilter = Q('arDeviceFilter').value;
-    var dpFilter = Q('arDpFilter').value;
-    var haFilter = Q('arHaFilter').value;
-    var patchFilter = Q('arPatchFilter').value;
-    var pyFilter = Q('arPyFilter').value;
-    var schemaFilter = Q('arSchemaFilter').value;
+    // Collect all dynamic kv filters
+    var kvFilters = {};
+    arKvKeys.forEach(function(k) {
+        var sel = document.getElementById('arKvFilter_' + k);
+        if (sel && sel.value) kvFilters[k] = sel.value;
+    });
     var nodes = document.querySelectorAll('#arNodeList .arNodeItem');
     nodes.forEach(function(lbl) {
         var name = lbl.getAttribute('data-name') || '';
         var type = lbl.getAttribute('data-type') || '';
         var ip = lbl.getAttribute('data-ip') || '';
-        var dp = lbl.getAttribute('data-dp') || '';
-        var ha = lbl.getAttribute('data-ha') || '';
-        var patch = lbl.getAttribute('data-patch') || '';
-        var py = lbl.getAttribute('data-py') || '';
-        var schema = lbl.getAttribute('data-schema') || '';
         var matchQ = !query || name.indexOf(query) !== -1 || ip.indexOf(query) !== -1 || type.toLowerCase().indexOf(query) !== -1;
         var matchType = !typeFilter || type === typeFilter;
-        var matchDp = !dpFilter || dp === dpFilter;
-        var matchHa = !haFilter || ha === haFilter;
-        var matchPatch = !patchFilter || patch === patchFilter;
-        var matchPy = !pyFilter || py === pyFilter;
-        var matchSchema = !schemaFilter || schema === schemaFilter;
-        lbl.style.display = (matchQ && matchType && matchDp && matchHa && matchPatch && matchPy && matchSchema) ? '' : 'none';
+        var matchKv = true;
+        for (var k in kvFilters) {
+            if ((lbl.getAttribute('data-kv-' + k) || '') !== kvFilters[k]) { matchKv = false; break; }
+        }
+        lbl.style.display = (matchQ && matchType && matchKv) ? '' : 'none';
     });
 }
 
