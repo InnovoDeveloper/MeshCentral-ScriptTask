@@ -3,266 +3,265 @@
     <script type="text/javascript" src="scripts/common-0.0.1.js"></script>
 </head>
 <style>
+    :root {
+      --bg: #ffffff; --bg2: #f5f6f8; --bg3: #ebedf0;
+      --fg: #1a1a1a; --fg2: #555; --fg3: #999;
+      --border: #ddd; --border2: #ccc;
+      --accent: #2563eb; --accent-hover: #1d4ed8;
+      --green: #16a34a; --red: #dc2626; --yellow: #d97706; --gray: #6b7280;
+      --folder-bg: #f0f4ff; --selected-bg: #dbeafe;
+      --cat-v1: #3b82f6; --cat-v2: #10b981; --cat-aura: #8b5cf6;
+      --cat-knx: #f59e0b; --cat-maint: #6b7280; --cat-diag: #06b6d4;
+      --cat-patch: #ef4444;
+      --radius: 6px; --radius-sm: 4px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08);
+      --transition: 0.15s ease;
+    }
+    * { box-sizing: border-box; }
     body {
-      font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px; color: var(--fg); background: var(--bg); margin: 0; padding: 0;
     }
     #dropBlock {
-      /*background-color: gray;
-      text-align: center;
-      height: 100%;
-      width: 100%;
-      position: absolute;
-      float:left;*/
-      
-      width: 100%;
-      overflow: hidden;
-      position: absolute;
-      right: 437px;
-      padding-top: 100px;
-      text-align: center;
-      font-size: 1600%;
-      color: #AAA;
-    }
-    #scripts_endpoints {
-      width: 100%;
-      height: 100%;
-    }
-    #scriptContainer {
-      width: 35%;
-      height: 100%;
-      float: left;
-    }
-    #infoContainer {
-      width: 65%;
-      height: 100%;
-      float: right;
-      border-left: 1px;
-    }
-    .lifolder {
-      background: url(data:image/gif;base64,R0lGODlhEAAQAJEDAM2xV/Xur+XPgP///yH5BAEAAAMALAAAAAAQABAAAAJD3ISZIGHWUGihznesYDYATFVM+D2hJ4lgN1olxALAtAlmPCJvuMmJd6PJckDYwicrHhTD5o7plJmg0Uc0asNMkphHAQA7) no-repeat 16px;
-      padding-left: 35px;
-      cursor: pointer;
-      border: none;
-      margin-top: 1px;
-    }
-    .liscript {
-      background: url(data:image/gif;base64,R0lGODlhEAAQAJEDAPb19IGBgbq6uv///yH5BAEAAAMALAAAAAAQABAAAAIy3ISpxgcPH2ouQgFEw1YmxnUXKEaaEZZnVWZk66JwzKpvuwZzwOgwb/C1gIOA8Yg8DgoAOw==) no-repeat 16px;
-      padding-left: 35px;
-      cursor: pointer;
-      border: none;
-      margin-top: 1px;
-    }
-    .liselected {
-      background-color: lightgray;
-    }
-    #controlBar {
-      width: 100%;
-      height: 20px;
-      border-bottom: 1px solid black;
-      font-size: smaller;
-      margin-bottom: 7px;
-    }
-    #controlBar span {
-      cursor: pointer;
-      padding-left: 4px;
-      padding-right: 4px;
-    }
-    #controlBar > span:nth-child(n+2) {
-      border-left: 1px solid black;
-    }
-    .infoBar {
-      background-color: #777;
-      color: white;
-      cursor: pointer;
-      padding: 10px;
-      width: 100%;
-      border: none;
-      text-align: left;
-      outline: none;
-      font-size: 15px;
-    }
-    .infoBar.active, .infoBar:hover {
-      background-color: #555;
-    }
-    .infoContent {
-      display: none;
-    }
-    #nHistTbl, #sHistTbl, #nSchTbl, #sSchTbl, #varTbl {
-        font-size: smaller;
-        width: 100%;
-    }
-    #nHistTbl td, #sHistTbl td, #nSchTbl td, #sSchTbl td, #varTbl td {
-        padding-left: 5px;
-        padding-right: 5px;
-    }
-    .stNHRow, .stSHRow, .stNSRow, .stSSRow {
-        height: 36px;
-        max-height: 40px;
-        width: 100%;
-    }
-    .stNHRow:nth-child(odd) {
-          background-color: #CCC;
-    }
-    .stSHRow:nth-child(odd) {
-          background-color: #CCC;
-    }
-    .stNSRow:nth-child(odd) {
-          background-color: #CCC;
-    }
-    .stSSRow:nth-child(odd) {
-          background-color: #CCC;
-    }
-    .stVRow:nth-child(odd) {
-          background-color: #CCC;
-    }
-    .delSched {
-        cursor: pointer;
-    }
-    .nIcon {
-      width:16px;
-      margin-top:1px;
-      margin-left:2px;
-      height:16px;
-      display: inline-block;
-      margin-right: 10px;
-    }
-    .j1 {
-        background: url(../images/icons16.png) 0px 0px;
-        height: 16px;
-        width: 16px;
-        border: none;
-    }
-    .j2 {
-        background: url(../images/icons16.png) -16px 0px;
-        height: 16px;
-        width: 16px;
-        border: none;
-    }
-    .j3 {
-        background: url(../images/icons16.png) -32px 0px;
-        height: 16px;
-        width: 16px;
-        border: none;
-    }
-    .j4 {
-        background: url(../images/icons16.png) -48px 0px;
-        height: 16px;
-        width: 16px;
-        border: none;
-    }
-    .j5 {
-        background: url(../images/icons16.png) -64px 0px;
-        height: 16px;
-        width: 16px;
-        border: none;
-    }
-    .j6 {
-        background: url(../images/icons16.png) -80px 0px;
-        height: 16px;
-        width: 16px;
-        border: none;
-    }
-    .ftype {
-        font-size: small;
-    }
-    .tblFloat {
-        float: left;
-        width: 33%;
-    }
-    .flink {
-        cursor: pointer;
-    }
-    #scriptFilterBar {
-        padding: 4px 2px;
-        font-size: smaller;
-        border-bottom: 1px solid #999;
-        margin-bottom: 4px;
-        display: flex;
-        gap: 4px;
-        align-items: center;
-    }
-    #scriptSearch {
-        flex: 1;
-        padding: 2px 4px;
-        font-size: 12px;
-        border: 1px solid #999;
-        border-radius: 3px;
-    }
-    #categoryFilter {
-        font-size: 12px;
-        padding: 2px;
-        border: 1px solid #999;
-        border-radius: 3px;
-    }
-    .catBadge {
-        font-size: 9px;
-        padding: 1px 4px;
-        border-radius: 3px;
-        background-color: #5a8;
-        color: #fff;
-        margin-left: 4px;
-        vertical-align: middle;
-    }
-    .scriptDesc {
-        font-size: 10px;
-        color: #888;
-        margin-left: 35px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: calc(100% - 40px);
+      width: 100%; overflow: hidden; position: absolute;
+      right: 437px; padding-top: 100px; text-align: center;
+      font-size: 1600%; color: var(--fg3);
     }
 
-    /* Dark mode support */
+    /* ── Upload bar ─────────────────────────────── */
+    #uploadBar {
+      padding: 6px 12px; background: var(--bg2); border-bottom: 1px solid var(--border);
+      font-size: 12px; color: var(--fg2); display: flex; align-items: center; gap: 8px;
+    }
+    #uploadBar label { font-weight: 500; }
+
+    /* ── Toolbar ────────────────────────────────── */
+    #controlBar {
+      display: flex; gap: 4px; padding: 8px 12px;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .tbtn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border: 1px solid var(--border2); border-radius: var(--radius);
+      background: var(--bg); color: var(--fg); font-size: 12px; font-weight: 500;
+      cursor: pointer; transition: all var(--transition); white-space: nowrap;
+    }
+    .tbtn:hover { background: var(--bg2); border-color: var(--accent); color: var(--accent); }
+    .tbtn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .tbtn.primary:hover { background: var(--accent-hover); }
+    .tbtn.danger { color: var(--red); }
+    .tbtn.danger:hover { background: #fef2f2; border-color: var(--red); }
+    .tbtn svg { width: 14px; height: 14px; fill: currentColor; }
+
+    /* ── Layout ──────────────────────────────────── */
+    #scripts_endpoints {
+      display: flex; width: 100%; min-height: 600px;
+    }
+    #scriptContainer {
+      width: 35%; border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+    }
+    #infoContainer {
+      width: 65%; overflow-y: auto;
+    }
+
+    /* ── Filter bar ──────────────────────────────── */
+    #scriptFilterBar {
+      padding: 8px 10px; display: flex; gap: 6px; align-items: center;
+      border-bottom: 1px solid var(--border); background: var(--bg2);
+    }
+    #scriptSearch {
+      flex: 1; padding: 5px 8px; font-size: 12px;
+      border: 1px solid var(--border2); border-radius: var(--radius);
+      background: var(--bg); color: var(--fg); outline: none;
+    }
+    #scriptSearch:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+    #categoryFilter {
+      padding: 5px 6px; font-size: 12px;
+      border: 1px solid var(--border2); border-radius: var(--radius);
+      background: var(--bg); color: var(--fg); outline: none;
+    }
+
+    /* ── Script tree ─────────────────────────────── */
+    #scriptTreeContent { flex: 1; overflow-y: auto; }
+    .lifolder {
+      padding: 6px 8px 6px 12px; cursor: pointer; border: none;
+      display: flex; align-items: center; gap: 6px;
+      border-bottom: 1px solid transparent; transition: background var(--transition);
+      font-weight: 600; font-size: 12px; color: var(--fg2);
+    }
+    .lifolder:hover { background: var(--folder-bg); }
+    .lifolder::before { content: "\uD83D\uDCC1"; font-size: 14px; }
+    .liscript {
+      padding: 5px 8px 5px 12px; cursor: pointer; border: none;
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      border-bottom: 1px solid transparent; transition: background var(--transition);
+      font-size: 12px;
+    }
+    .liscript:hover { background: var(--bg2); }
+    .liscript::before { content: "\uD83D\uDCC4"; font-size: 13px; }
+    .liselected { background: var(--selected-bg) !important; border-left: 3px solid var(--accent); }
+    .fname { font-weight: 500; }
+    .ftype {
+      font-size: 10px; padding: 1px 5px; border-radius: 3px;
+      background: var(--bg3); color: var(--fg2); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .catBadge {
+      font-size: 10px; padding: 1px 6px; border-radius: 10px;
+      color: #fff; font-weight: 600; letter-spacing: 0.3px;
+    }
+    .catBadge[data-cat="V1"]          { background: var(--cat-v1); }
+    .catBadge[data-cat="V2"]          { background: var(--cat-v2); }
+    .catBadge[data-cat="Aura"]        { background: var(--cat-aura); }
+    .catBadge[data-cat="KNX"]         { background: var(--cat-knx); }
+    .catBadge[data-cat="Maintenance"] { background: var(--cat-maint); }
+    .catBadge[data-cat="Diagnostics"] { background: var(--cat-diag); }
+    .catBadge[data-cat="Patching"]    { background: var(--cat-patch); }
+    .scriptDesc {
+      font-size: 11px; color: var(--fg3); padding: 0 8px 4px 38px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      width: 100%;
+    }
+
+    /* ── Script info card ────────────────────────── */
+    #scriptInfoCard {
+      display: none; padding: 12px 16px; background: var(--bg2);
+      border-bottom: 1px solid var(--border); margin: 0;
+    }
+    #scriptInfoCard .si-name { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+    #scriptInfoCard .si-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    #scriptInfoCard .si-desc { font-size: 12px; color: var(--fg2); margin-top: 6px; }
+
+    /* ── Accordion sections ──────────────────────── */
+    .infoBar {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg2); color: var(--fg); cursor: pointer;
+      padding: 10px 14px; width: 100%;
+      border: none; border-bottom: 1px solid var(--border);
+      text-align: left; outline: none; font-size: 13px; font-weight: 600;
+      transition: background var(--transition);
+    }
+    .infoBar::before {
+      content: "\25B6"; font-size: 9px; color: var(--fg3);
+      transition: transform var(--transition); display: inline-block;
+    }
+    .infoBar.active::before { transform: rotate(90deg); }
+    .infoBar:hover { background: var(--bg3); }
+    .infoContent { display: none; padding: 0; }
+
+    /* ── Tables ───────────────────────────────────── */
+    #nHistTbl, #sHistTbl, #nSchTbl, #sSchTbl, #varTbl {
+      font-size: 12px; width: 100%; border-collapse: collapse;
+    }
+    #nHistTbl th, #sHistTbl th, #nSchTbl th, #sSchTbl th, #varTbl th {
+      background: var(--bg3); color: var(--fg2); font-weight: 600;
+      padding: 8px 10px; text-align: left; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--border);
+    }
+    #nHistTbl td, #sHistTbl td, #nSchTbl td, #sSchTbl td, #varTbl td {
+      padding: 7px 10px; border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .stNHRow, .stSHRow, .stNSRow, .stSSRow { width: 100%; }
+    .stNHRow:nth-child(even), .stSHRow:nth-child(even),
+    .stNSRow:nth-child(even), .stSSRow:nth-child(even),
+    .stVRow:nth-child(even) { background: var(--bg2); }
+    .stNHRow:hover, .stSHRow:hover, .stNSRow:hover, .stSSRow:hover,
+    .stVRow:hover { background: var(--bg3); }
+
+    /* ── Status badges ────────────────────────────── */
+    .st-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
+    }
+    .st-badge.completed { background: #dcfce7; color: #166534; }
+    .st-badge.error     { background: #fef2f2; color: #991b1b; }
+    .st-badge.running   { background: #fef9c3; color: #854d0e; }
+    .st-badge.queued    { background: #f3f4f6; color: #4b5563; }
+    .st-badge.scheduled { background: #dbeafe; color: #1e40af; }
+
+    /* ── Return value preview ─────────────────────── */
+    .retval-preview {
+      max-height: 60px; overflow: hidden; font-size: 11px;
+      color: var(--fg2); line-height: 1.4; cursor: pointer;
+      position: relative;
+    }
+    .retval-preview.expanded { max-height: none; }
+    .retval-preview::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+      height: 20px; background: linear-gradient(transparent, var(--bg));
+      pointer-events: none;
+    }
+    .retval-preview.expanded::after { display: none; }
+
+    .delSched { cursor: pointer; color: var(--red); font-weight: 500; }
+    .delSched:hover { text-decoration: underline; }
+    .nIcon {
+      width:16px; margin-top:1px; margin-left:2px; height:16px;
+      display: inline-block; margin-right: 10px;
+    }
+    .j1 { background: url(../images/icons16.png) 0px 0px; height:16px; width:16px; border:none; }
+    .j2 { background: url(../images/icons16.png) -16px 0px; height:16px; width:16px; border:none; }
+    .j3 { background: url(../images/icons16.png) -32px 0px; height:16px; width:16px; border:none; }
+    .j4 { background: url(../images/icons16.png) -48px 0px; height:16px; width:16px; border:none; }
+    .j5 { background: url(../images/icons16.png) -64px 0px; height:16px; width:16px; border:none; }
+    .j6 { background: url(../images/icons16.png) -80px 0px; height:16px; width:16px; border:none; }
+    .tblFloat { float: left; width: 33%; }
+    .flink { cursor: pointer; color: var(--accent); font-weight: 500; }
+    .flink:hover { text-decoration: underline; }
+    #multiRun button {
+      padding: 6px 14px; border-radius: var(--radius); border: 1px solid var(--accent);
+      background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+    }
+    #multiRun button:hover { background: var(--accent-hover); }
+
+    /* ── Dark / Night mode ────────────────────────── */
     @media (prefers-color-scheme: dark) {
-      body { background-color: #1e1e1e; color: #d4d4d4; }
-      .liselected { background-color: #3a3a3a; }
-      .infoBar { background-color: #333; color: #d4d4d4; }
-      .infoBar.active, .infoBar:hover { background-color: #444; }
-      .stNHRow:nth-child(odd), .stSHRow:nth-child(odd),
-      .stNSRow:nth-child(odd), .stSSRow:nth-child(odd),
-      .stVRow:nth-child(odd) { background-color: #2a2a2a; }
-      #controlBar { border-bottom-color: #555; color: #d4d4d4; }
-      #controlBar > span:nth-child(n+2) { border-left-color: #555; }
-      .lifolder, .liscript { color: #d4d4d4; }
-      #dropBlock { color: #555; }
-      a, .flink { color: #6cb4ee; }
-      #scriptSearch, #categoryFilter { background-color: #2a2a2a; color: #d4d4d4; border-color: #555; }
-      .scriptDesc { color: #777; }
-      #scriptFilterBar { border-bottom-color: #555; }
+      :root {
+        --bg: #1e1e1e; --bg2: #252525; --bg3: #2d2d2d;
+        --fg: #d4d4d4; --fg2: #999; --fg3: #666;
+        --border: #3a3a3a; --border2: #444;
+        --accent: #5b9cf6; --accent-hover: #4a8be8;
+        --folder-bg: #2a2d35; --selected-bg: #1e3a5f;
+      }
+      .st-badge.completed { background: #14532d; color: #86efac; }
+      .st-badge.error     { background: #450a0a; color: #fca5a5; }
+      .st-badge.running   { background: #422006; color: #fde68a; }
+      .st-badge.queued    { background: #1f2937; color: #9ca3af; }
+      .st-badge.scheduled { background: #1e3a5f; color: #93c5fd; }
+      .retval-preview::after { background: linear-gradient(transparent, var(--bg)); }
     }
-    /* MeshCentral night mode class support */
     body.night {
-      background-color: #1e1e1e; color: #d4d4d4;
+      --bg: #1e1e1e; --bg2: #252525; --bg3: #2d2d2d;
+      --fg: #d4d4d4; --fg2: #999; --fg3: #666;
+      --border: #3a3a3a; --border2: #444;
+      --accent: #5b9cf6; --accent-hover: #4a8be8;
+      --folder-bg: #2a2d35; --selected-bg: #1e3a5f;
     }
-    body.night .liselected { background-color: #3a3a3a; }
-    body.night .infoBar { background-color: #333; color: #d4d4d4; }
-    body.night .infoBar.active, body.night .infoBar:hover { background-color: #444; }
-    body.night .stNHRow:nth-child(odd), body.night .stSHRow:nth-child(odd),
-    body.night .stNSRow:nth-child(odd), body.night .stSSRow:nth-child(odd),
-    body.night .stVRow:nth-child(odd) { background-color: #2a2a2a; }
-    body.night #controlBar { border-bottom-color: #555; color: #d4d4d4; }
-    body.night #controlBar > span:nth-child(n+2) { border-left-color: #555; }
-    body.night .lifolder, body.night .liscript { color: #d4d4d4; }
-    body.night #dropBlock { color: #555; }
-    body.night a, body.night .flink { color: #6cb4ee; }
-    body.night #scriptSearch, body.night #categoryFilter { background-color: #2a2a2a; color: #d4d4d4; border-color: #555; }
-    body.night .scriptDesc { color: #777; }
-    body.night #scriptFilterBar { border-bottom-color: #555; }
+    body.night .st-badge.completed { background: #14532d; color: #86efac; }
+    body.night .st-badge.error     { background: #450a0a; color: #fca5a5; }
+    body.night .st-badge.running   { background: #422006; color: #fde68a; }
+    body.night .st-badge.queued    { background: #1f2937; color: #9ca3af; }
+    body.night .st-badge.scheduled { background: #1e3a5f; color: #93c5fd; }
+    body.night .retval-preview::after { background: linear-gradient(transparent, var(--bg)); }
 </style>
 <body onload="doOnLoad();">
 <div id="scriptTaskUser">
   <div id="dropBlock" style="display:none;"><b>&checkmark;</b></div>
-  Upload: <input type="file" id="files" name="files[]" multiple onchange="fileUpload();"/>
-  <hr />
+  <div id="uploadBar">
+    <label>Upload:</label> <input type="file" id="files" name="files[]" multiple onchange="fileUpload();"/>
+  </div>
   <div id="controlBar">
-    <span onclick="goNew();">New</span>
-    <span onclick="goRename();">Rename</span>
-    <span onclick="goEdit();">Edit</span>
-    <span onclick="goDelete();">Delete</span>
-    <span onclick="goNewFolder();">New Folder</span>
-    <span onclick="goDownload();">Download</span>
-    <span onclick="goRun();">Run</span>
+    <button class="tbtn" onclick="goNew();"><svg viewBox="0 0 16 16"><path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2"/></svg> New</button>
+    <button class="tbtn" onclick="goRename();"><svg viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293z"/></svg> Rename</button>
+    <button class="tbtn" onclick="goEdit();"><svg viewBox="0 0 16 16"><path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M6.854 4.646a.5.5 0 0 1 0 .708L4.207 8l2.647 2.646a.5.5 0 0 1-.708.708l-3-3a.5.5 0 0 1 0-.708l3-3a.5.5 0 0 1 .708 0m2.292 0a.5.5 0 0 0 0 .708L11.793 8l-2.647 2.646a.5.5 0 0 0 .708.708l3-3a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708 0"/></svg> Edit</button>
+    <button class="tbtn danger" onclick="goDelete();"><svg viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg> Delete</button>
+    <button class="tbtn" onclick="goNewFolder();"><svg viewBox="0 0 16 16"><path d="m.5 3 .04.87a2 2 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H9v-1H2.826a1 1 0 0 1-.995-.91l-.637-7A1 1 0 0 1 2.19 4h11.62a1 1 0 0 1 .996 1.09L14.54 8h1.005l.256-2.819A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2"/><path d="M15.5 10h-1a.5.5 0 0 0 0 1H15v1h-1a.5.5 0 0 0 0 1h.5v1h-1a.5.5 0 0 0 0 1h1a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5"/></svg> Folder</button>
+    <button class="tbtn" onclick="goDownload();"><svg viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/></svg> Download</button>
+    <button class="tbtn primary" onclick="goRun();"><svg viewBox="0 0 16 16"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393"/></svg> Run</button>
   </div>
   <div id="scripts_endpoints">
     <div id="scriptContainer">
@@ -282,10 +281,18 @@
       <div id="scriptTreeContent"></div>
     </div>
     <div id="infoContainer">
+      <div id="scriptInfoCard">
+        <div class="si-name" id="siName"></div>
+        <div class="si-meta">
+          <span class="ftype" id="siType"></span>
+          <span class="catBadge" id="siCat" style="display:none;"></span>
+        </div>
+        <div class="si-desc" id="siDesc"></div>
+      </div>
       <div id="history">
           <div class="infoBar">Advanced Run</div>
           <div id="multiRun" class="infoContent">
-              <div style="padding-top: 15px;"><button onclick="goAdvancedRun();">Schedule on Selected</button></div>
+              <div style="padding: 12px;"><button onclick="goAdvancedRun();">Schedule on Selected</button></div>
               <div class="tblFloat">
                   <table id="mRunTbl" cellspacing="0" cellpadding="0">
                       <tr><td><label><input type="checkbox" onclick="selAllNodes(this);"> Select All</label></td></tr>
@@ -293,49 +300,49 @@
               </div>
               <div class="tblFloat">
                   <table id="mRunTblMesh" cellspacing="0" cellpadding="0">
-                      <tr><td>Meshes</td></tr>
+                      <tr><td><strong>Meshes</strong></td></tr>
                   </table>
               </div>
               <div class="tblFloat">
                   <table id="mRunTblTag" cellspacing="0" cellpadding="0">
-                      <tr><td>Tags</td></tr>
+                      <tr><td><strong>Tags</strong></td></tr>
                   </table>
               </div>
           </div>
           <div class="infoBar">Node Schedules</div>
           <div id="nSch" class="infoContent">
               <table id="nSchTbl" cellspacing="0" cellpadding="0">
-                  <th>Script</th><th>Author</th><th>Every</th><th>Starting</th><th>Ending</th><th>Last Run</th><th>Next Run</th><th>Action</th>
+                  <tr><th>Script</th><th>Author</th><th>Every</th><th>Starting</th><th>Ending</th><th>Last Run</th><th>Next Run</th><th>Action</th></tr>
               </table>
           </div>
           <div class="infoBar">Script Schedules</div>
           <div id="sSch" class="infoContent">
               <table id="sSchTbl" cellspacing="0" cellpadding="0">
-                  <th>Node</th><th>Author</th><th>Every</th><th>Starting</th><th>Ending</th><th>Last Run</th><th>Next Run</th><th>Action</th>
+                  <tr><th>Node</th><th>Author</th><th>Every</th><th>Starting</th><th>Ending</th><th>Last Run</th><th>Next Run</th><th>Action</th></tr>
               </table>
           </div>
         <div class="infoBar">Node History</div>
         <div id="nodeHistory" class="infoContent">
             <table id="nHistTbl" cellspacing="0" cellpadding="0">
-                <th>Time</th><th>Run By</th><th>Script</th><th>Status</th><th>Return Value</th>
+                <tr><th>Time</th><th>Run By</th><th>Script</th><th>Status</th><th>Return Value</th></tr>
             </table>
         </div>
         <div class="infoBar">Script History</div>
         <div id="scriptHistory" class="infoContent">
             <table id="sHistTbl" cellspacing="0" cellpadding="0">
-                <th>Time</th><th>Run By</th><th>Node</th><th>Status</th><th>Return Value</th>
+                <tr><th>Time</th><th>Run By</th><th>Node</th><th>Status</th><th>Return Value</th></tr>
             </table>
         </div>
         <div class="infoBar">Variables</div>
         <div id="variables" class="infoContent">
             <table id="varTbl" cellspacing="0" cellpadding="0">
-                <th>Variable Name</th><th>Value</th><th>Scope</th><th>Scope Target</th><th>Action</th>
+                <tr><th>Variable Name</th><th>Value</th><th>Scope</th><th>Scope Target</th><th>Action</th></tr>
             </table>
-            <br />
-            <span class="flink" onclick="newVar();return false;">[+]</span>
+            <div style="padding: 8px 10px;">
+              <span class="flink" onclick="newVar();return false;">+ New Variable</span>
+            </div>
         </div>
       </div>
-      
     </div>
   </div>
 </div>
@@ -364,8 +371,6 @@ function filterScriptTree() {
     var query = (Q('scriptSearch').value || '').toLowerCase();
     var cat = Q('categoryFilter').value;
     var scripts = document.querySelectorAll('.liscript');
-    var descs = document.querySelectorAll('.scriptDesc');
-    // Build set of visible script IDs
     var visiblePaths = {};
     scripts.forEach(function(el) {
         var name = (el.querySelector('.fname') || {}).textContent || '';
@@ -375,21 +380,18 @@ function filterScriptTree() {
         var matchCat = !cat || elCat === cat;
         var show = matchSearch && matchCat;
         el.style.display = show ? '' : 'none';
-        // Also hide/show the description line that follows
         if (el.nextElementSibling && el.nextElementSibling.classList.contains('scriptDesc')) {
             el.nextElementSibling.style.display = show ? '' : 'none';
         }
         if (show) {
             var path = el.getAttribute('x-data-path');
             visiblePaths[path] = true;
-            // Also mark all parent paths visible
             var parts = path.split('/');
             for (var i = 1; i <= parts.length; i++) {
                 visiblePaths[parts.slice(0, i).join('/')] = true;
             }
         }
     });
-    // Show/hide folders based on whether they contain visible scripts
     var folders = document.querySelectorAll('.lifolder');
     folders.forEach(function(el) {
         var fpath = el.getAttribute('x-data-path');
@@ -403,11 +405,26 @@ function resizeIframe() {
     document.body.style.height = 0;
     parent.pluginHandler.innovoscripttask.resizeContent();
 }
+function updateScriptInfoCard(el) {
+    var card = Q('scriptInfoCard');
+    if (!el || el.getAttribute('x-data-id') === el.getAttribute('x-data-folder')) {
+        card.style.display = 'none'; return;
+    }
+    var name = (el.querySelector('.fname') || {}).textContent || '';
+    var ftype = el.querySelector('.ftype') ? el.querySelector('.ftype').textContent : '';
+    var cat = el.getAttribute('x-data-category') || '';
+    var desc = el.getAttribute('x-data-description') || '';
+    Q('siName').textContent = name;
+    Q('siType').textContent = ftype;
+    var catEl = Q('siCat');
+    if (cat) { catEl.textContent = cat; catEl.setAttribute('data-cat', cat); catEl.style.display = ''; }
+    else { catEl.style.display = 'none'; }
+    Q('siDesc').textContent = desc || 'No description';
+    card.style.display = '';
+}
 function updateNodesTable() {
   let dRows = document.querySelectorAll('.stNodeRow');
-  dRows.forEach((r) => {
-      r.parentNode.removeChild(r);
-  });
+  dRows.forEach((r) => { r.parentNode.removeChild(r); });
   var tagList = [];
   var nodeRowIns = document.querySelector('#mRunTbl');
   parent.nodes.forEach(function(i) {
@@ -425,7 +442,7 @@ function updateNodesTable() {
   });
   tagList = tagList.filter(onlyUnique); tagList = tagList.sort();
   var nodeRowIns = document.querySelector('#mRunTblMesh');
-  for (const i in parent.meshes) { // parent.meshes.forEach(function(i) {
+  for (const i in parent.meshes) {
       var item = {...parent.meshes[i], ...{}};
       if (item.mtype == 2) {
           let tpl = `<tr class="stNodeRow">
@@ -446,31 +463,23 @@ function updateNodesTable() {
 function selNodesByTag(el) {
     var t = el.value;
     var allNodes = Q('mRunTbl').querySelectorAll('input[type="checkbox"][name="runOn[]"]');
-    var checked = false;
-    if (el.checked) checked = true;
+    var checked = el.checked;
     allNodes.forEach(function(n) {
-        if (nodesObj[n.value].tags && nodesObj[n.value].tags.indexOf(t) > -1) n.checked = checked;      
+        if (nodesObj[n.value].tags && nodesObj[n.value].tags.indexOf(t) > -1) n.checked = checked;
     });
-    return true;
 }
 function selNodesByMesh(el) {
     var mid = el.value;
     var allNodes = Q('mRunTbl').querySelectorAll('input[type="checkbox"][name="runOn[]"]');
-    var checked = false;
-    if (el.checked) checked = true;
+    var checked = el.checked;
     allNodes.forEach(function(n) {
-        if (nodesObj[n.value].meshid == mid) n.checked = checked;      
+        if (nodesObj[n.value].meshid == mid) n.checked = checked;
     });
-    return true;
 }
 function selAllNodes(el) {
   var allNodes = Q('mRunTbl').querySelectorAll('input[type="checkbox"][name="runOn[]"]');
-  var checked = false;
-  if (el.checked) checked = true;
-  allNodes.forEach(function(n) {
-      n.checked = checked;      
-  });
-  return true;
+  var checked = el.checked;
+  allNodes.forEach(function(n) { n.checked = checked; });
 }
 
 function doOnLoad() {
@@ -478,7 +487,7 @@ function doOnLoad() {
   selectPreviouslySelectedScript();
   updateNodesTable();
   parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadNodeHistory', 'nodeId': parent.currentNode._id });
-  parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadVariables', 'nodeId': parent.currentNode._id });  
+  parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadVariables', 'nodeId': parent.currentNode._id });
 }
 
 function selectPreviouslySelectedScript() {
@@ -490,22 +499,20 @@ function selectPreviouslySelectedScript() {
         goScript(s);
       }
     }
-    if (sel_item != null)   parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadScriptHistory', 'scriptId': sel_item });
+    if (sel_item != null) parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadScriptHistory', 'scriptId': sel_item });
 }
 
 function goRun() {
     var selScript = document.querySelectorAll('.liselected');
     if (selScript.length) {
       var scriptId = selScript[0].getAttribute('x-data-id');
-      if (scriptId == selScript[0].getAttribute('x-folder-id'))
-      {
-          parent.setDialogMode(2, "Oops!", 1, null, 'Please select a script. A folder is currently selected.'); 
-      }
-      else {
+      if (scriptId == selScript[0].getAttribute('x-folder-id')) {
+          parent.setDialogMode(2, "Oops!", 1, null, 'Please select a script. A folder is currently selected.');
+      } else {
           parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'runScript', 'scriptId': scriptId, 'nodes': [ parent.currentNode._id ], 'currentNodeId': parent.currentNode._id });
       }
     } else {
-        parent.setDialogMode(2, "Oops!", 1, null, 'No script has been selected to run on the machines.'); 
+        parent.setDialogMode(2, "Oops!", 1, null, 'No script has been selected to run on the machines.');
     }
 }
 
@@ -518,21 +525,15 @@ function goEdit() {
           parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'editScript', 'scriptId': sd._id, 'scriptType': sd.type, 'scriptName': sd.name, 'scriptContent': sd.content, 'scriptDescription': sd.description, 'scriptCategory': sd.category, 'currentNodeId': parent.currentNode._id });
       };
     } else {
-      parent.setDialogMode(2, "Oops!", 1, null, 'No script has been selected to edit.'); 
+      parent.setDialogMode(2, "Oops!", 1, null, 'No script has been selected to edit.');
     }
 }
 
 function goAdvancedRun() {
   var cboxes = document.getElementsByName("runOn[]");
   var sel = [];
-  
-  cboxes.forEach((n) => {
-      if (n.checked) sel.push(n.value);
-  });
-  if (sel.length == 0) {
-      parent.setDialogMode(2, "Oops!", 1, null, 'No machines have been selected.'); 
-      return;
-  }
+  cboxes.forEach((n) => { if (n.checked) sel.push(n.value); });
+  if (sel.length == 0) { parent.setDialogMode(2, "Oops!", 1, null, 'No machines have been selected.'); return; }
   var selScript = document.querySelectorAll('.liselected');
   if (selScript.length) {
     var scriptId = selScript[0].getAttribute('x-data-id');
@@ -540,18 +541,14 @@ function goAdvancedRun() {
     sWin.scriptId = scriptId;
     sWin.nodes = sel;
     window.schedCallback = function(opts) {
-        parent.meshserver.send({ 
-            'action': 'plugin', 
-            'plugin': 'innovoscripttask', 
-            'pluginaction': 'addScheduledJob', 
-            'scriptId': opts.scriptId, 
-            'nodes': opts.nodes, 
-            'currentNodeId': parent.currentNode._id,
-            'schedule': opts
+        parent.meshserver.send({
+            'action': 'plugin', 'plugin': 'innovoscripttask',
+            'pluginaction': 'addScheduledJob', 'scriptId': opts.scriptId,
+            'nodes': opts.nodes, 'currentNodeId': parent.currentNode._id, 'schedule': opts
         });
     };
   } else {
-    parent.setDialogMode(2, "Oops!", 1, null, 'No script has been selected to run on the machines.'); 
+    parent.setDialogMode(2, "Oops!", 1, null, 'No script has been selected to run on the machines.');
   }
 }
 
@@ -566,7 +563,7 @@ for (var i = 0; i < coll.length; i++) {
       content.style.display = "block";
     }
     content.style.maxHeight = '300px';
-    content.style.overflowY = 'scroll';
+    content.style.overflowY = 'auto';
     resizeIframe();
   });
 }
@@ -580,14 +577,12 @@ function goDownload() {
   window.location = '/pluginadmin.ashx?pin=innovoscripttask&user=1&dl='+id;
 }
 function addScript(name, content, path) {
-  // file type testing
   var n = name.split('.').pop().toLowerCase();
   if (content.split('\n')[0][0] == '#' && content.split('\n')[0][1] == '!') n = 'bash';
   if (['ps1', 'bat', 'bash'].indexOf(n) !== -1) {
     parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'addScript', name: name, content: content, path: path, filetype: n, description: '', category: '' });
-  }
-  else {
-    parent.setDialogMode(2, "Oops!", 1, null, 'Currently accepted filetypes are .ps1, .bat, and bash scripts.'); 
+  } else {
+    parent.setDialogMode(2, "Oops!", 1, null, 'Currently accepted filetypes are .ps1, .bat, and bash scripts.');
   }
 }
 function redrawScriptTree() {
@@ -601,17 +596,16 @@ function redrawScriptTree() {
       indent = (f.path.match(/\//g) || []).length + 1;
       var name = f.path.match(/[^\/]+$/);
       folder_id = f._id;
-      str += '<div draggable="true" x-data-path="' + f.path + '" x-data-id="' + f._id + '" x-data-folder="' + folder_id + '" style="margin-left: ' + indent + 'em;" class="lifolder" onclick="toggleCollapse(this);"><span class="fname">' + name + '</span></div>';
+      str += '<div draggable="true" x-data-path="' + f.path + '" x-data-id="' + f._id + '" x-data-folder="' + folder_id + '" style="padding-left: ' + (indent * 16) + 'px;" class="lifolder" onclick="toggleCollapse(this);"><span class="fname">' + name + '</span></div>';
       lastpath = f.path;
       indent += 1;
     }
     if (f.type != 'folder') {
-        var catBadge = (f.category) ? ' <span class="catBadge">' + escHtml(f.category) + '</span>' : '';
+        var catBadge = (f.category) ? ' <span class="catBadge" data-cat="' + escHtml(f.category) + '">' + escHtml(f.category) + '</span>' : '';
         var descTitle = (f.description) ? ' title="' + escHtml(f.description) + '"' : '';
-        var descLine = (f.description) ? '<div class="scriptDesc">' + escHtml(f.description) + '</div>' : '';
-        str += '<div id="' + f._id + '" draggable="true" x-data-path="' + f.path + '" x-data-id="' + f._id + '" x-data-folder="' + folder_id + '" x-data-category="' + escHtml(f.category || '') + '" x-data-description="' + escHtml(f.description || '') + '" style="margin-left: ' + indent + 'em;" class="liscript"' + descTitle + ' onclick="goScript(this);"><span class="fname">' + f.name + '</span> [<span class="ftype">' + f.filetype + '</span>]' + catBadge + '</div>' + descLine;
+        var descLine = (f.description) ? '<div class="scriptDesc" style="padding-left: ' + (indent * 16 + 24) + 'px;">' + escHtml(f.description) + '</div>' : '';
+        str += '<div id="' + f._id + '" draggable="true" x-data-path="' + f.path + '" x-data-id="' + f._id + '" x-data-folder="' + folder_id + '" x-data-category="' + escHtml(f.category || '') + '" x-data-description="' + escHtml(f.description || '') + '" style="padding-left: ' + (indent * 16) + 'px;" class="liscript"' + descTitle + ' onclick="goScript(this);"><span class="fname">' + f.name + '</span> <span class="ftype">' + f.filetype + '</span>' + catBadge + '</div>' + descLine;
     }
-
   });
   str += '</div>';
   document.getElementById('scriptTreeContent').innerHTML = str;
@@ -637,31 +631,20 @@ function redrawScriptTree() {
       redrawScriptTree();
   }
   parent.pluginHandler.innovoscripttask.loadHistory = function(message) {
-      // cache script names
       var nNames = {};
-      parent.nodes.forEach(function(n){ 
-         nNames[n._id] = n.name; 
-      });
+      parent.nodes.forEach(function(n){ nNames[n._id] = n.name; });
       if (message.event.nodeHistory != null && message.event.nodeId == parent.currentNode._id) {
           var nHistTbl = document.getElementById('nHistTbl');
           var rows = nHistTbl.querySelectorAll('.stNHRow');
-          if (rows.length) {
-              rows.forEach(function(r) {
-                 r.parentNode.removeChild(r); 
-              });
-          }
+          if (rows.length) { rows.forEach(function(r) { r.parentNode.removeChild(r); }); }
           if (message.event.nodeHistory.length) {
               message.event.nodeHistory.forEach(function(nh) {
-                 nh.latestTime = Math.max(nh.completeTime, nh.queueTime, nh.dispatchTime, nh.dontQueueUntil); 
+                 nh.latestTime = Math.max(nh.completeTime, nh.queueTime, nh.dispatchTime, nh.dontQueueUntil);
               });
               message.event.nodeHistory.sort((a, b) => (a.latestTime < b.latestTime) ? 1 : -1);
               message.event.nodeHistory.forEach(function(nh) {
                   nh = prepHistory(nh);
-                  let tpl = '<td>' + nh.timeStr + '</td> \
-                    <td>' + nh.runBy + '</td> \
-                    <td>' + nh.scriptName + '</td> \
-                    <td>' + nh.statusTxt + '</td> \
-                    <td>' + nh.returnTxt + '</td>';
+                  let tpl = '<td>' + nh.timeStr + '</td><td>' + nh.runBy + '</td><td>' + nh.scriptName + '</td><td>' + nh.statusHtml + '</td><td><div class="retval-preview" onclick="this.classList.toggle(\'expanded\')">' + nh.returnTxt + '</div></td>';
                   let tr = nHistTbl.insertRow(-1);
                   tr.innerHTML = tpl;
                   tr.classList.add('stNHRow');
@@ -673,23 +656,15 @@ function redrawScriptTree() {
       if (message.event.scriptHistory != null && message.event.scriptId == currentScriptId) {
           var sHistTbl = document.getElementById('sHistTbl');
           var rows = sHistTbl.querySelectorAll('.stSHRow');
-          if (rows.length) {
-              rows.forEach(function(r) {
-                 r.parentNode.removeChild(r); 
-              });
-          }
+          if (rows.length) { rows.forEach(function(r) { r.parentNode.removeChild(r); }); }
           if (message.event.scriptHistory.length) {
               message.event.scriptHistory.forEach(function(nh) {
-                 nh.latestTime = Math.max(nh.completeTime, nh.queueTime, nh.dispatchTime, nh.dontQueueUntil); 
+                 nh.latestTime = Math.max(nh.completeTime, nh.queueTime, nh.dispatchTime, nh.dontQueueUntil);
               });
               message.event.scriptHistory.sort((a, b) => (a.latestTime < b.latestTime) ? 1 : -1);
               message.event.scriptHistory.forEach(function(nh) {
                   nh = prepHistory(nh);
-                  let tpl = '<td>' + nh.timeStr + '</td> \
-                    <td>' + nh.runBy + '</td> \
-                    <td>' + nNames[nh.node] + '</td> \
-                    <td>' + nh.statusTxt + '</td> \
-                    <td>' + nh.returnTxt + '</td>';
+                  let tpl = '<td>' + nh.timeStr + '</td><td>' + nh.runBy + '</td><td>' + nNames[nh.node] + '</td><td>' + nh.statusHtml + '</td><td><div class="retval-preview" onclick="this.classList.toggle(\'expanded\')">' + nh.returnTxt + '</div></td>';
                   let tr = sHistTbl.insertRow(-1);
                   tr.innerHTML = tpl;
                   tr.classList.add('stSHRow');
@@ -704,20 +679,21 @@ function redrawScriptTree() {
       d.setUTCSeconds(nh.latestTime);
       nh.timeStr = d.toLocaleString();
       if (nh.errorVal != null) { nh.returnTxt = nh.errorVal; } else { nh.returnTxt = nh.returnVal; }
-      nh.statusTxt = 'Queued';
-      if (nh.dispatchTime != null) nh.statusTxt = 'Running';
-      if (nh.errorVal != null) nh.statusTxt = 'Error';
-      if (nh.returnVal != null) nh.statusTxt = 'Completed';
-      if (nh.dontQueueUntil > nowTime) nh.statusTxt = 'Scheduled'; 
+      nh.statusTxt = 'Queued'; nh.statusClass = 'queued';
+      if (nh.dispatchTime != null) { nh.statusTxt = 'Running'; nh.statusClass = 'running'; }
+      if (nh.errorVal != null) { nh.statusTxt = 'Error'; nh.statusClass = 'error'; }
+      if (nh.returnVal != null) { nh.statusTxt = 'Completed'; nh.statusClass = 'completed'; }
+      if (nh.dontQueueUntil > nowTime) { nh.statusTxt = 'Scheduled'; nh.statusClass = 'scheduled'; }
       if (nh.returnTxt == null) nh.returnTxt = '&nbsp;';
-      if (nh.statusTxt == 'Completed') {
-          nh.statusTxt = '<span title="Completed ' + secondsToHms((nh.completeTime - nh.dispatchTime)) + '">' + nh.statusTxt + '</span>';
+      var durationHtml = '';
+      if (nh.statusClass == 'completed' && nh.completeTime && nh.dispatchTime) {
+          durationHtml = ' <span style="font-size:10px;color:var(--fg3)">(' + secondsToHms((nh.completeTime - nh.dispatchTime)) + ')</span>';
       }
+      nh.statusHtml = '<span class="st-badge ' + nh.statusClass + '">' + nh.statusTxt + '</span>' + durationHtml;
       if (isJsonString(nh.returnTxt)) {
           try {
               nh.returnObj = JSON.parse(nh.returnTxt);
-              nh.returnTxt = 'Object: ';
-              nh.returnTxt += '' + JSON.stringify(nh.returnObj, null, 2);
+              nh.returnTxt = 'Object: ' + JSON.stringify(nh.returnObj, null, 2);
               nh.returnTxt = nh.returnTxt.replace(/\n\s*\n/g, '\n');
               nh.returnTxt = nh.returnTxt.replace(/(?:\r\n|\r|\n)/g, '<br />');
           } catch(e) { }
@@ -734,31 +710,24 @@ function redrawScriptTree() {
           var vars = message.event.vars;
           vars.forEach(function(vd) {
               switch (vd.scope) {
-                  case 'global':
-                      vd.scopeTargetTxt = vd.scopeTargetHtml = 'N/A';
-                  break;
+                  case 'global': vd.scopeTargetTxt = vd.scopeTargetHtml = 'N/A'; break;
                   case 'script':
                       var s = scriptTree.filter(obj => { return obj._id === vd.scopeTarget })[0]
                       vd.scopeTargetHtml = '<span title="' + s.path + '">' + s.name + '</span>';
-                      vd.scopeTargetTxt = s.name;
-                  break;
+                      vd.scopeTargetTxt = s.name; break;
                   case 'mesh':
-                      vd.scopeTargetTxt = vd.scopeTargetHtml = parent.meshes[vd.scopeTarget].name;
-                  break;
+                      vd.scopeTargetTxt = vd.scopeTargetHtml = parent.meshes[vd.scopeTarget].name; break;
                   case 'node':
                       var n = parent.nodes.filter(obj => { return obj._id === vd.scopeTarget })[0]
                       vd.scopeTargetHtml = '<span title="' + n.meshnamel + '">' + n.name + '</span>';
-                      vd.scopeTargetTxt = n.name;
-                  break;
-                  default:
-                      vd.scopeTargetTxt = vd.scopeTargetHtml = 'N/A';
-                  break;
+                      vd.scopeTargetTxt = n.name; break;
+                  default: vd.scopeTargetTxt = vd.scopeTargetHtml = 'N/A'; break;
               }
               vd.scopeTxt = varScopes[vd.scope];
           })
           var ordering = { 'global': 0, 'script': 1, 'mesh': 2, 'node': 3 }
           vars.sort((a, b) => {
-              return (ordering[a.scope] - ordering[b.scope]) 
+              return (ordering[a.scope] - ordering[b.scope])
                 || a.name.localeCompare(b.name)
                 || a.scopeTargetTxt.localeCompare(b.scopeTargetTxt);
           });
@@ -769,12 +738,7 @@ function redrawScriptTree() {
   function parseVariables() {
       var vTbl = document.getElementById('varTbl');
       var rows = vTbl.querySelectorAll('.stVRow');
-      
-      if (rows.length) {
-          rows.forEach(function(r) {
-             r.parentNode.removeChild(r); 
-          });
-      }
+      if (rows.length) { rows.forEach(function(r) { r.parentNode.removeChild(r); }); }
       var scriptEl = document.querySelectorAll('.liselected');
       if (scriptEl.length != 1) return;
       var el = scriptEl[0];
@@ -783,12 +747,8 @@ function redrawScriptTree() {
           if (vd.scope == 'script' && vd.scopeTarget != scopeTargetScriptId) return;
           if (vd.scope == 'mesh' && vd.scopeTarget != parent.currentNode.meshid) return;
           if (vd.scope == 'node' && vd.scopeTarget != parent.currentNode._id) return;
-          let actionHtml = '<span class="flink" onclick="editVar(this);">Edit</span> <span class="flink" onclick="delVar(this);">Delete</span>';
-          let tpl = '<td>' + vd.name + '</td> \
-            <td>' + vd.value + '</td> \
-            <td>' + vd.scopeTxt + '</td> \
-            <td>' + vd.scopeTargetHtml + '</td> \
-            <td>' + actionHtml + '</td>';
+          let actionHtml = '<span class="flink" onclick="editVar(this);">Edit</span> <span class="flink" style="color:var(--red)" onclick="delVar(this);">Delete</span>';
+          let tpl = '<td>' + vd.name + '</td><td>' + vd.value + '</td><td>' + vd.scopeTxt + '</td><td>' + vd.scopeTargetHtml + '</td><td>' + actionHtml + '</td>';
           let tr = vTbl.insertRow(-1);
           tr.innerHTML = tpl;
           tr.classList.add('stVRow');
@@ -796,33 +756,17 @@ function redrawScriptTree() {
       })
   }
   parent.pluginHandler.innovoscripttask.loadSchedule = function(message) {
-      // cache script names
       var nNames = {}, sNames = {};
-      parent.nodes.forEach(function(n){ 
-         nNames[n._id] = n.name; 
-      });
-      scriptTree.forEach(function(s) {
-         if (s.type == 'script') sNames[s._id] = s.name;
-      });
+      parent.nodes.forEach(function(n){ nNames[n._id] = n.name; });
+      scriptTree.forEach(function(s) { if (s.type == 'script') sNames[s._id] = s.name; });
       if (message.event.nodeSchedule != null && message.event.nodeId == parent.currentNode._id) {
           var nTbl = document.getElementById('nSchTbl');
           var rows = nTbl.querySelectorAll('.stNSRow');
-          if (rows.length) {
-              rows.forEach(function(r) {
-                 r.parentNode.removeChild(r); 
-              });
-          }
+          if (rows.length) { rows.forEach(function(r) { r.parentNode.removeChild(r); }); }
           if (message.event.nodeSchedule.length) {
               message.event.nodeSchedule.forEach(function(nh) {
                   nh = prepSchedule(nh);
-                  let tpl = '<td>' + sNames[nh.scriptId] + '</td> \
-                    <td>' + nh.scheduledBy + '</td> \
-                    <td>' + nh.everyTxt + '</td> \
-                    <td>' + nh.startedTxt + '</td> \
-                    <td>' + nh.endingTxt + '</td> \
-                    <td>' + nh.lastRunTxt + '</td> \
-                    <td>' + nh.nextRunTxt + '</td> \
-                    <td>' + nh.actionTxt + '</td>';
+                  let tpl = '<td>' + sNames[nh.scriptId] + '</td><td>' + nh.scheduledBy + '</td><td>' + nh.everyTxt + '</td><td>' + nh.startedTxt + '</td><td>' + nh.endingTxt + '</td><td>' + nh.lastRunTxt + '</td><td>' + nh.nextRunTxt + '</td><td>' + nh.actionTxt + '</td>';
                   let tr = nTbl.insertRow(-1);
                   tr.innerHTML = tpl;
                   tr.classList.add('stNSRow');
@@ -835,22 +779,11 @@ function redrawScriptTree() {
       if (message.event.scriptSchedule != null && message.event.scriptId == currentScriptId) {
           var sTbl = document.getElementById('sSchTbl');
           var rows = sTbl.querySelectorAll('.stSSRow');
-          if (rows.length) {
-              rows.forEach(function(r) {
-                 r.parentNode.removeChild(r); 
-              });
-          }
+          if (rows.length) { rows.forEach(function(r) { r.parentNode.removeChild(r); }); }
           if (message.event.scriptSchedule.length) {
               message.event.scriptSchedule.forEach(function(nh) {
                   nh = prepSchedule(nh);
-                  let tpl = '<td>' + nNames[nh.node] + '</td> \
-                    <td>' + nh.scheduledBy + '</td> \
-                    <td>' + nh.everyTxt + '</td> \
-                    <td>' + nh.startedTxt + '</td> \
-                    <td>' + nh.endingTxt + '</td> \
-                    <td>' + nh.lastRunTxt + '</td> \
-                    <td>' + nh.nextRunTxt + '</td> \
-                    <td>' + nh.actionTxt + '</td>';
+                  let tpl = '<td>' + nNames[nh.node] + '</td><td>' + nh.scheduledBy + '</td><td>' + nh.everyTxt + '</td><td>' + nh.startedTxt + '</td><td>' + nh.endingTxt + '</td><td>' + nh.lastRunTxt + '</td><td>' + nh.nextRunTxt + '</td><td>' + nh.actionTxt + '</td>';
                   let tr = sTbl.insertRow(-1);
                   tr.innerHTML = tpl;
                   tr.classList.add('stSSRow');
@@ -863,44 +796,27 @@ function redrawScriptTree() {
   function prepSchedule(nh) {
       nh.everyTxt = nh.interval + ' ';
       switch (nh.recur) {
-          case 'once':
-            nh.everyTxt = 'Once';
-          break;
-          case 'minutes':
-            nh.everyTxt += 'minute';
-          break;
-          case 'hourly':
-            nh.everyTxt += 'hour';
-          break;
-          case 'daily':
-            nh.everyTxt += 'day';
-          break;
-          case 'weekly':
-            nh.everyTxt += 'week';
-          break;
-          case 'monthly':
-            nh.everyTxt += 'month';
-          break;
+          case 'once': nh.everyTxt = 'Once'; break;
+          case 'minutes': nh.everyTxt += 'minute'; break;
+          case 'hourly': nh.everyTxt += 'hour'; break;
+          case 'daily': nh.everyTxt += 'day'; break;
+          case 'weekly': nh.everyTxt += 'week'; break;
+          case 'monthly': nh.everyTxt += 'month'; break;
       }
       if (nh.interval > 1) nh.everyTxt += 's';
-      
       if (nh.recur == 'weekly') {
           nh.daysOfWeek = nh.daysOfWeek.map(el => Number(el));
           nh.everyTxt += ' (';
           nh.daysOfWeek.forEach(function(num) {
               switch(num) {
-                  case 0: nh.everyTxt += 'S'; break;
-                  case 1: nh.everyTxt += 'M'; break;
-                  case 2: nh.everyTxt += 'T'; break;
-                  case 3: nh.everyTxt += 'W'; break;
-                  case 4: nh.everyTxt += 'R'; break;
-                  case 5: nh.everyTxt += 'F'; break;
+                  case 0: nh.everyTxt += 'S'; break; case 1: nh.everyTxt += 'M'; break;
+                  case 2: nh.everyTxt += 'T'; break; case 3: nh.everyTxt += 'W'; break;
+                  case 4: nh.everyTxt += 'R'; break; case 5: nh.everyTxt += 'F'; break;
                   case 6: nh.everyTxt += 'S'; break;
               }
           });
           nh.everyTxt += ')';
       }
-      
       var d = new Date(0); d.setUTCSeconds(nh.startAt);
       nh.startedTxt = d.toLocaleString();
       d = new Date(0); d.setUTCSeconds(nh.endAt);
@@ -914,7 +830,6 @@ function redrawScriptTree() {
       nh.nextRunTxt = d.toLocaleString();
       if (nh.nextRun == null) nh.nextRunTxt = 'Never';
       if (nh.nextRun < nh.lastRun) nh.nextRunTxt = 'Running now';
-      
       nh.actionTxt = '<span class="delSched" onclick="deleteSchedule(this);">Delete</span>';
       return nh;
   }
@@ -924,18 +839,13 @@ function redrawScriptTree() {
     var h = Math.floor(d / 3600);
     var m = Math.floor(d % 3600 / 60);
     var s = Math.floor(d % 3600 % 60);
-
     var hDisplay = h > 0 ? h + (h == 1 ? " hour, " : " hours, ") : "";
     var mDisplay = m > 0 ? m + (m == 1 ? " minute, " : " minutes, ") : "";
     var sDisplay = s > 0 ? s + (s == 1 ? " second" : " seconds") : "";
-    return "in " + hDisplay + mDisplay + sDisplay; 
+    return hDisplay + mDisplay + sDisplay;
   }
   function isJsonString(str) {
-    try {
-        JSON.parse(str);
-    } catch (e) {
-        return false;
-    }
+    try { JSON.parse(str); } catch (e) { return false; }
     return true;
   }
   function newVarEx() {
@@ -943,21 +853,13 @@ function redrawScriptTree() {
       var scope = parent.document.getElementById('stvarscope').value;
       var value = parent.document.getElementById('stvarvalue').value;
       var scopeTarget = null;
-      if (scope == 'script') {
-          var scriptEl = document.querySelectorAll('.liselected');
-          if (scriptEl.length != 1) return;
-          var el = scriptEl[0];
-          scopeTarget = el.getAttribute('x-data-id');
-      } else if (scope == 'mesh') {
-          scopeTarget = parent.currentNode.meshid;
-      } else if (scope == 'node') {
-          scopeTarget = parent.currentNode._id;
-      }
+      if (scope == 'script') { var scriptEl = document.querySelectorAll('.liselected'); if (scriptEl.length != 1) return; scopeTarget = scriptEl[0].getAttribute('x-data-id'); }
+      else if (scope == 'mesh') { scopeTarget = parent.currentNode.meshid; }
+      else if (scope == 'node') { scopeTarget = parent.currentNode._id; }
       parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'newVar', name: name, scope: scope, scopeTarget: scopeTarget, value: value, currentNodeId: parent.currentNode._id });
-
   }
   function newVar() {
-      parent.setDialogMode(2, "New Variable", 3, newVarEx, 'Variable Name: <input type="text" id=stvarname /><br />Scope: <select id=stvarscope><option value="global">Global</option><option value="script">Script</option><option value="mesh">Mesh</option><option value="node">Node</option></select><br />Value: <input id="stvarvalue" type="text" />'); 
+      parent.setDialogMode(2, "New Variable", 3, newVarEx, 'Variable Name: <input type="text" id=stvarname /><br />Scope: <select id=stvarscope><option value="global">Global</option><option value="script">Script</option><option value="mesh">Mesh</option><option value="node">Node</option></select><br />Value: <input id="stvarvalue" type="text" />');
       parent.focusTextBox('stvarname');
   }
   function editVarEx() {
@@ -966,16 +868,9 @@ function redrawScriptTree() {
       var scope = parent.document.getElementById('stvarscope').value;
       var value = parent.document.getElementById('stvarvalue').value;
       var scopeTarget = null;
-      if (scope == 'script') {
-          var scriptEl = document.querySelectorAll('.liselected');
-          if (scriptEl.length != 1) return;
-          var el = scriptEl[0];
-          scopeTarget = el.getAttribute('x-data-id');
-      } else if (scope == 'mesh') {
-          scopeTarget = parent.currentNode.meshid;
-      } else if (scope == 'node') {
-          scopeTarget = parent.currentNode._id;
-      }
+      if (scope == 'script') { var scriptEl = document.querySelectorAll('.liselected'); if (scriptEl.length != 1) return; scopeTarget = scriptEl[0].getAttribute('x-data-id'); }
+      else if (scope == 'mesh') { scopeTarget = parent.currentNode.meshid; }
+      else if (scope == 'node') { scopeTarget = parent.currentNode._id; }
       parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'editVar', id: varid, name: name, scope: scope, scopeTarget: scopeTarget, value: value, currentNodeId: parent.currentNode._id });
   }
   function editVar(el) {
@@ -987,18 +882,17 @@ function redrawScriptTree() {
           if (v.scope == k) soptHtml += ' selected';
           soptHtml += '>' + t + '</option>';
       }
-      parent.setDialogMode(2, "Edit Variable", 3, editVarEx, 'Variable Name: <input type="text" id=stvarname value="' + v.name + '" /><br />Scope: <select id=stvarscope>' + soptHtml + '</select><br />Value: <input id="stvarvalue" type="text" value="' + v.value + '" /><input type="hidden" id="stvarid" value="' + vid + '" />'); 
+      parent.setDialogMode(2, "Edit Variable", 3, editVarEx, 'Variable Name: <input type="text" id=stvarname value="' + v.name + '" /><br />Scope: <select id=stvarscope>' + soptHtml + '</select><br />Value: <input id="stvarvalue" type="text" value="' + v.value + '" /><input type="hidden" id="stvarid" value="' + vid + '" />');
       parent.focusTextBox('stvarname');
   }
   function delVarEx() {
       var varid = parent.document.getElementById('stvarid').value;
       parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'deleteVar', id: varid, currentNodeId: parent.currentNode._id });
-
   }
   function delVar(el) {
       var vid = el.parentNode.parentNode.getAttribute('x-data-id');
       var v = variables.filter(obj => { return obj._id === vid })[0];
-      parent.setDialogMode(2, "Delete Variable", 3, delVarEx, 'Are you sure you want to delete this?<input type="hidden" id="stvarid" value="' + vid + '" /><br />Name: '+ v.name +'<br />Scope: '+ varScopes[v.scope] +'<br />Value: '+ v.value); 
+      parent.setDialogMode(2, "Delete Variable", 3, delVarEx, 'Are you sure you want to delete this?<input type="hidden" id="stvarid" value="' + vid + '" /><br />Name: '+ v.name +'<br />Scope: '+ varScopes[v.scope] +'<br />Value: '+ v.value);
   }
   function renameEx() {
     var name = parent.document.getElementById('stfilename').value;
@@ -1011,7 +905,7 @@ function redrawScriptTree() {
     var el = scriptEl[0];
     var name = el.querySelector('.fname').innerHTML;
     var id = el.getAttribute('x-data-id');
-    parent.setDialogMode(2, "Rename " + name, 3, renameEx, '<input type="text"  value="' + name + '" id=stfilename style=width:100% /><input type="hidden" id="stid" value="' + id + '" />'); 
+    parent.setDialogMode(2, "Rename " + name, 3, renameEx, '<input type="text"  value="' + name + '" id=stfilename style=width:100% /><input type="hidden" id="stid" value="' + id + '" />');
     parent.focusTextBox('stfilename');
   }
   function newEx() {
@@ -1023,11 +917,8 @@ function redrawScriptTree() {
   function goNew() {
     var scriptEl = document.querySelectorAll('.liselected');
     var folder_id = null;
-    if (scriptEl.length > 0) {
-        var el = scriptEl[0];
-        folder_id = el.getAttribute('x-data-folder');
-    }
-    parent.setDialogMode(2, "New Script", 3, newEx, 'Name: <input type="text"  value="' + name + '" id=stfilename style=width:100% /><br />Type:<select id="stfiletype"><option value="bash">Bash</option><option value="bat">BAT</option><option value="ps1">PS1</option></select><input type="hidden" id="stfolderid" value="' + folder_id + '" />'); 
+    if (scriptEl.length > 0) { folder_id = scriptEl[0].getAttribute('x-data-folder'); }
+    parent.setDialogMode(2, "New Script", 3, newEx, 'Name: <input type="text"  value="' + name + '" id=stfilename style=width:100% /><br />Type:<select id="stfiletype"><option value="bash">Bash</option><option value="bat">BAT</option><option value="ps1">PS1</option></select><input type="hidden" id="stfolderid" value="' + folder_id + '" />');
     parent.focusTextBox('stfilename');
   }
   function newFolderEx() {
@@ -1038,22 +929,18 @@ function redrawScriptTree() {
   function goNewFolder() {
     var scriptEl = document.querySelectorAll('.liselected');
     var folder_id = null;
-    if (scriptEl.length > 0) {
-      var el = scriptEl[0];
-      folder_id = el.getAttribute('x-data-folder');
-    }
-    parent.setDialogMode(2, "New Folder", 3, newFolderEx, '<input type="text"  value="" id=stfoldername style=width:100% /><input type="hidden" id="stfolderid" value="' + folder_id + '" />'); 
+    if (scriptEl.length > 0) { folder_id = scriptEl[0].getAttribute('x-data-folder'); }
+    parent.setDialogMode(2, "New Folder", 3, newFolderEx, '<input type="text"  value="" id=stfoldername style=width:100% /><input type="hidden" id="stfolderid" value="' + folder_id + '" />');
     parent.focusTextBox('stfoldername');
   }
   function goScript(el) {
     var xdi = el.getAttribute('x-data-id');
     var scriptEls = document.querySelectorAll('.liselected');
     parent.putstore('_innovoscripttask_sel_item', xdi);
-    scriptEls.forEach(function(e) {
-      e.classList.remove('liselected');
-    })
+    scriptEls.forEach(function(e) { e.classList.remove('liselected'); })
     el.classList.add('liselected');
     Q('scriptHistory').setAttribute('x-data-id', el.getAttribute('x-data-id'));
+    updateScriptInfoCard(el);
     if (xdi != el.getAttribute('x-data-folder')) {
         parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'loadScriptHistory', scriptId: xdi });
     }
@@ -1069,7 +956,7 @@ function redrawScriptTree() {
     var el = els[0];
     var name = el.innerHTML;
     var id = el.getAttribute('x-data-id');
-    parent.setDialogMode(2, "Delete " + name, 3, deleteEx, 'Are you sure? <input type="hidden" id="stdelid" value="' + id + '" />'); 
+    parent.setDialogMode(2, "Delete " + name, 3, deleteEx, 'Are you sure? <input type="hidden" id="stdelid" value="' + id + '" />');
   }
   function deleteScheduleEx() {
     var id = parent.document.getElementById('stdelid').value;
@@ -1077,50 +964,40 @@ function redrawScriptTree() {
   }
   function deleteSchedule(el) {
       var id = el.parentNode.parentNode.getAttribute('x-data-id');
-      parent.setDialogMode(2, "Delete Schedule", 3, deleteScheduleEx, 'Are you sure you want to delete this schedule? <input type="hidden" id="stdelid" value="' + id + '" />'); 
+      parent.setDialogMode(2, "Delete Schedule", 3, deleteScheduleEx, 'Are you sure you want to delete this schedule? <input type="hidden" id="stdelid" value="' + id + '" />');
   }
   function toggleCollapse(el) {
     var xdf = el.getAttribute('x-data-path');
-    var folderEls = document.querySelectorAll('.lifolder, .liscript');
+    var folderEls = document.querySelectorAll('.lifolder, .liscript, .scriptDesc');
     var showHide = null;
     folderEls.forEach(function(e){
       if (e === el) return;
-      if (e.getAttribute('x-data-path').indexOf(xdf) !== -1) {
-        if (e.style.display == 'none') { 
-          if (showHide === null) showHide = '';
-        } else {
-          if (showHide === null) showHide = 'none';
-        }
-        e.style.display = showHide; 
+      var ePath = e.getAttribute('x-data-path') || e.previousElementSibling && e.previousElementSibling.getAttribute && e.previousElementSibling.getAttribute('x-data-path');
+      if (ePath && ePath.indexOf(xdf) !== -1) {
+        if (showHide === null) showHide = (e.style.display == 'none') ? '' : 'none';
+        e.style.display = showHide;
       }
     });
     goScript(el);
   }
   function handleFileSelect(evt) {
     evt.preventDefault();
-    var files = evt.dataTransfer.files; // FileList object
-    // files is a FileList of File objects. List some properties.
     QV('dropBlock', false);
-    var output = [];
-    fileUpload(files);
+    fileUpload(evt.dataTransfer.files);
     elementDragged = false;
     if (dragTimer != null) dragTimer = null;
-    //document.getElementById('list').innerHTML = '<ul>' + output.join('') + '</ul>';
   }
-  
+
   function fileUpload(files) {
     if (files == null) files = document.getElementById('files').files;
     var path = null;
     var isSelected = document.querySelectorAll('.liselected');
-    if (isSelected.length) {
-      var sel = isSelected[0];
-      path = sel.getAttribute('x-data-path');
-    }
+    if (isSelected.length) { path = isSelected[0].getAttribute('x-data-path'); }
     for (var i = 0, f; f = files[i]; i++) {
       var reader = new FileReader();
       reader.fileName = f.name;
       reader.readAsBinaryString(f);
-      reader.addEventListener('loadend', function(e, file){
+      reader.addEventListener('loadend', function(e){
           addScript(e.currentTarget.fileName, e.currentTarget.result, path);
       });
     }
@@ -1130,7 +1007,7 @@ function redrawScriptTree() {
   var dropBlock = document.getElementById('dropBlock');
   var dragTimer = null;
   function allowDrag(e) {
-      if (!elementDragged) {  // Test that the item being dragged is a valid one
+      if (!elementDragged) {
           e.dataTransfer.dropEffect = 'copy';
           QV('dropBlock', true);
           e.preventDefault();
@@ -1138,26 +1015,20 @@ function redrawScriptTree() {
           dragTimer = setTimeout(function(){ dragCounter = 0; QV('dropBlock', false); }, 100);
       }
   }
-  
+
   function dropMove(evt) {
     const move_id = evt.dataTransfer.getData('text');
     const container_id = evt.target.parentNode.getAttribute('x-data-id');
     parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'move', id: move_id, to: container_id });
   }
-  // file upload events
-  window.addEventListener('dragenter', function(e) {
-      dragCounter++;
-  });
+  window.addEventListener('dragenter', function(e) { dragCounter++; });
   dropZone.addEventListener('dragenter', allowDrag);
   dropZone.addEventListener('dragover', allowDrag);
   dropZone.addEventListener('dragleave', function(e) {
       dragCounter--;
-      if (dragCounter == 0) {
-        QV('dropBlock', false);
-        elementDragged = false;
-      }
+      if (dragCounter == 0) { QV('dropBlock', false); elementDragged = false; }
   });
   dropZone.addEventListener('drop', handleFileSelect);
-  
+
 </script>
 </html>
