@@ -4,7 +4,7 @@
 
 InnovoScriptTask is a forked and enhanced MeshCentral plugin for running scripts (Bash, PowerShell, BAT) on managed devices. Forked from [ryanblenis/MeshCentral-ScriptTask](https://github.com/ryanblenis/MeshCentral-ScriptTask) with significant UI and functionality improvements.
 
-**Repo**: `InnovoDeveloper/MeshCentral-ScriptTask`
+**Repo**: `InnovoDeveloper/MeshCentral-ScriptTask` (public — no proprietary data in code)
 **Plugin shortName**: `innovoscripttask`
 **MongoDB collection**: `plugin_innovoscripttask` (separate from original `plugin_scripttask`)
 
@@ -45,63 +45,76 @@ MongoDB Atlas (meshcentral DB)
 - `config.json` → `"shortName": "innovoscripttask"`
 - Main file → `innovoscripttask.js` (not `scripttask.js`)
 - Meshcore → `modules_meshcore/innovoscripttask.js`
+- After editing `innovoscripttask.js`, also copy to `scripttask.js` for legacy compat
+
+## Data Privacy
+
+- **Public**: Plugin source code (GitHub repo) — fully generic, zero proprietary device names, version schemes, or tag patterns hardcoded
+- **Private**: Script content, job history, device data — all in MongoDB Atlas, never in repo
+- **Private**: Migration/seeding scripts — ran ad-hoc on server in `/tmp/`, not committed
+- **Private**: MeshCentral config (MongoDB URI, SMTP creds) — on server only
+- Tag parser is fully generic: auto-discovers `key- value` pairs from any prefix pattern
+- Device type detection uses first non-trivial label (no hardcoded product names)
+- All filter dropdowns generated dynamically from discovered data at runtime
 
 ## What Changed from Original ScriptTask
 
 ### Rename (all files)
 - `shortName` changed from `scripttask` to `innovoscripttask`
 - Separate MongoDB collection `plugin_innovoscripttask`
-- Separate NeDB file `plugin-innovoscripttask.db`
 - All WebSocket `plugin:` messages use `innovoscripttask`
-- All `pluginHandler.` references updated
 - Tab shows as "InnovoScriptTask" in MeshCentral UI
 - Can run side-by-side with original ScriptTask without conflicts
 
-### Phase 1: Script Organization
+### Phase 1: Script Organization (Complete)
 - **Description field** on scripts (one-line summary, shown in tree + info card)
-- **Category field** on scripts (single primary classifier with color)
+- **Category field** on scripts (single primary classifier with custom color)
 - **Tags field** on scripts (array, multiple tags per script)
-- **Dynamic categories & tags** stored as `type: "meta"` documents in DB
-- **Management UI** accordion to add/delete categories and tags with color picker
+- **Dynamic categories & tags** stored as `type: "meta"` documents in DB (not hardcoded)
+- **Management UI** accordion: add/delete/rename categories and tags with color picker
+- **Rename cascades**: renaming a category or tag updates all scripts referencing the old name
 - **Search bar** in script tree — filters by name or description
 - **Category filter dropdown** — auto-populated from DB
 - **Script info card** — shows name, type badge, category, tags, description when selected
-- **SVG icons** for folders and scripts (replacing broken emoji rendering)
+- **SVG icons** for folders (golden) and scripts (gray document with lines)
+- Script editor: multi-tag chip selector with dropdown, category dropdown, description field
 
-### Phase 2: Device Selection (Advanced Run)
-- **Smart tag parsing** — extracts structured data from MeshCentral ServerTags:
-  - `MagicCube*`, `MagicPro`, `MC-*` → Device Type
-  - `dp- X.X.X` → DietPi version
-  - `ha- X.X.X` → Home Assistant version
-  - `p- X` → Patch level
-  - `py- X.X.X` → Python version
-  - `s- X` → Schema version
-  - IP addresses and MAC addresses
-- **7 filter dropdowns**: Search, Device Type, DietPi, HA, Patch, Python, Schema
+### Phase 2: Device Selection — Advanced Run (Complete)
+- **Status filter pills**: All / Online / Offline / Tagged / Untagged — with live counts
+- **Online/offline dots** (green/red) next to each device name
+- **Generic tag parser** — auto-discovers `key- value` pairs from any prefix pattern (no hardcoded device names or version schemes)
+- **Dynamic version filter dropdowns** — one per discovered kv key, auto-populated
+- **Device type dropdown** — auto-populated from first label tag
 - **4-column layout**: Nodes (with version badges) | Meshes | Device Types | Versions
 - **Version checkboxes** — select/deselect all nodes at a specific version
-- **Select Visible / Deselect Visible** buttons for bulk operations
+- **Select Visible / Deselect Visible** buttons for bulk operations on filtered results
 - **Live selected count** indicator
+- **Node search** — filter by name, IP, or device type
+- **Hover tooltip** — rich info card on mouse hover showing device name, mesh, IP, MAC, all version tags, labels, and raw tags
+- **Resizable columns** — drag right edge to resize
+- **Sortable node list** — A-Z (name), Type (device type), Sel (checked first) — preserves checkbox state
+- All filters combine with AND logic
 
-### UI Modernization
+### UI Modernization (Complete)
 - **Modern toolbar** with SVG icon buttons (New, Rename, Edit, Delete, Folder, Download, Run)
-- **Color-coded category badges** using DB-stored colors
-- **Tag chips** displayed inline in script tree
+- **Color-coded category badges** using DB-stored custom colors
+- **Tag chips** displayed inline in script tree and info card
 - **Status badges** for job history (Completed=green, Error=red, Running=yellow, Queued=gray)
+- **Enhanced queued status** — shows "device offline" in red when target node is disconnected
 - **Return value preview** — collapsible with click-to-expand and gradient fade
 - **Accordion chevrons** with rotation animation
-- **CSS variables** for full dark/night mode theming
-- **System font stack** replacing Trebuchet MS
+- **CSS variables** for full dark/night mode theming (prefers-color-scheme + MeshCentral night class)
+- **System font stack** (-apple-system, Segoe UI, Roboto)
 
-### Safety
+### Safety (Complete)
 - **Run confirmation** — "Run scriptName on deviceName?" dialog before execution
-- **Delete confirmation** — shows item name, warns about folder contents
+- **Delete confirmation** — shows item name in bold, warns about folder contents in red
 - **Auto-open history** — Node History and Script History panels expand after confirming Run
 
 ### Bug Fixes (inherited from earlier patches)
 - Orphaned job null-check (scripttask.js line 72)
 - Dark mode CSS + parent night mode detection
-- Modern theme setDialogMode → showModal compatibility
+- Modern theme setDialogMode compatibility
 
 ## Database Schema
 
@@ -143,6 +156,33 @@ MongoDB Atlas (meshcentral DB)
 }
 ```
 
+### Job Document
+```json
+{
+  "_id": "ObjectId",
+  "type": "job",
+  "scriptId": "ObjectId",
+  "scriptName": "fix_aura_v2_token",
+  "node": "node//...",
+  "runBy": "user@domain",
+  "queueTime": 1774923078,
+  "dontQueueUntil": 1774923078,
+  "dispatchTime": null,
+  "completeTime": null,
+  "returnVal": null,
+  "errorVal": null,
+  "jobSchedule": null
+}
+```
+
+### Job Lifecycle
+```
+Run clicked → job created (type:"job", queued)
+  → queueRun() every 60s checks online agents
+    → device online? dispatch to agent → agent runs → jobComplete → returnVal set
+    → device offline? stays queued → UI shows "Queued / device offline"
+```
+
 ## Server Deployment
 
 ### Location
@@ -169,21 +209,27 @@ scp -i MeshCentral.pem db.js ubuntu@54.190.77.20:/home/ubuntu/meshcentral-data/p
 ssh -i MeshCentral.pem ubuntu@54.190.77.20 "sudo systemctl restart meshcentral"
 ```
 
-### Data Privacy
-- **Public**: Plugin source code (GitHub repo) — generic framework, no secrets
-- **Private**: Script content, job history, device data — all in MongoDB Atlas, never in repo
-- **Private**: Migration/seeding scripts — ran ad-hoc on server in `/tmp/`, not committed
-- **Private**: MeshCentral config (MongoDB URI, SMTP creds) — on server only
+### Ad-hoc MongoDB Queries
+```bash
+ssh ubuntu@54.190.77.20 'cd /home/ubuntu && NODE_PATH=node_modules node -e "
+const { MongoClient } = require(\"mongodb\");
+const url = \"mongodb+srv://...\";
+MongoClient.connect(url).then(async c => {
+  const db = c.db(\"meshcentral\");
+  // your query here
+  c.close();
+});
+"'
+```
 
 ## Development Workflow
 
 1. Edit files locally in `v:\VS\MC-Workspaces\InnovoScriptTask\`
-2. Test changes: commit → push → scp to server → restart MeshCentral → hard refresh browser
-3. **Important**: After editing `innovoscripttask.js`, also copy to `scripttask.js` (legacy compat)
-4. MongoDB queries for debugging:
-   ```bash
-   ssh ubuntu@54.190.77.20 'cd /home/ubuntu && NODE_PATH=node_modules node -e "..."'
-   ```
+2. After editing `innovoscripttask.js`, copy to `scripttask.js`: `cp innovoscripttask.js scripttask.js`
+3. `git add` → `git commit` → `git push`
+4. `scp` changed files to server
+5. `ssh ... "sudo systemctl restart meshcentral"`
+6. Hard refresh browser (Ctrl+Shift+R)
 
 ## Default Categories (seeded on first run)
 | Category | Color | Use for |
@@ -196,18 +242,21 @@ ssh -i MeshCentral.pem ubuntu@54.190.77.20 "sudo systemctl restart meshcentral"
 | Diagnostics | #06b6d4 (cyan) | Debug, check, test scripts |
 | Patching | #ef4444 (red) | OS updates, installs, patches |
 
+Categories and tags are fully dynamic — add/rename/delete from the Management UI.
+
 ## Default Tags (19 seeded)
 home-assistant, mesh-agent, networking, bluetooth, dietpi, pm2, disk-cleanup, reboot, knx-server, token, ssl, vnc, zwave, hacs, locale, oem, api, nginx, crontab
 
 ## Planned Improvements
 
 ### Phase 3: Job Visibility (not yet implemented)
-- Batch job results view (one table for all devices)
+- Batch job results view (one table for all devices in a run)
 - Success/fail summary count
 - Output preview in results table
 
 ### Other Ideas
 - Save device groups for reuse (named selections)
 - Script archiving (hide without delete)
-- Script version history
-- Bulk tag editing
+- Script version history / changelog
+- Bulk tag editing across multiple scripts
+- Export/import scripts as JSON bundle
