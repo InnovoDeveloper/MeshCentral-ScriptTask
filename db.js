@@ -29,7 +29,7 @@ module.exports.CreateDB = function(meshserver) {
             });
         };
 
-        obj.addScript = function(name, content, path, filetype, description, category) {
+        obj.addScript = function(name, content, path, filetype, description, category, tags) {
             if (path == null) path = "Shared"
             if (filetype == 'bash') content = content.split('\r\n').join('\n').split('\r').join('\n');
             var sObj = {
@@ -40,7 +40,8 @@ module.exports.CreateDB = function(meshserver) {
                 contentHash: require('crypto').createHash('sha384').update(content).digest('hex'),
                 filetype: filetype,
                 description: description || '',
-                category: category || ''
+                category: category || '',
+                tags: Array.isArray(tags) ? tags : []
             };
             return obj.scriptFile.insertOne(sObj);
         };
@@ -62,7 +63,7 @@ module.exports.CreateDB = function(meshserver) {
             ).sort(
                 { path: 1, type: 1, name: 1 }
             ).project(
-                { name: 1, path: 1, type: 1, filetype: 1, description: 1, category: 1 }
+                { name: 1, path: 1, type: 1, filetype: 1, description: 1, category: 1, tags: 1 }
             ).toArray();
         };
         
@@ -242,14 +243,40 @@ module.exports.CreateDB = function(meshserver) {
                 return obj.scriptFile.find({ type: 'variable' }).sort({ name: 1 }).toArray();
             }
         };
+        // ── Category & Tag management ──────────────────────
+        obj.getMetaList = function(metaType) {
+            return obj.scriptFile.find({ type: 'meta', metaType: metaType }).sort({ name: 1 }).toArray();
+        };
+        obj.addMeta = function(metaType, name, color) {
+            return obj.scriptFile.insertOne({ type: 'meta', metaType: metaType, name: name, color: color || '' });
+        };
+        obj.deleteMeta = function(id) {
+            id = formatId(id);
+            return obj.scriptFile.deleteOne({ _id: id });
+        };
+
         obj.checkDefaults = function() {
             obj.scriptFile.find( { type: 'folder', name: 'Shared', path: 'Shared' } ).toArray()
             .then(found => {
               if (found.length == 0) obj.addFolder('Shared', 'Shared');
             })
             .catch(e => { console.log('PLUGIN: InnovoScriptTask: Default folder check failed. Error was: ', e); });
+            // Seed default categories if none exist
+            obj.scriptFile.find({ type: 'meta', metaType: 'category' }).toArray()
+            .then(found => {
+                if (found.length == 0) {
+                    var defaults = [
+                        { name: 'V1', color: '#3b82f6' }, { name: 'V2', color: '#10b981' },
+                        { name: 'Aura', color: '#8b5cf6' }, { name: 'KNX', color: '#f59e0b' },
+                        { name: 'Maintenance', color: '#6b7280' }, { name: 'Diagnostics', color: '#06b6d4' },
+                        { name: 'Patching', color: '#ef4444' }
+                    ];
+                    defaults.forEach(d => obj.addMeta('category', d.name, d.color));
+                }
+            })
+            .catch(e => {});
         };
-        
+
         obj.checkDefaults();
     };
     

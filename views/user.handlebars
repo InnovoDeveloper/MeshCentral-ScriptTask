@@ -124,6 +124,23 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       width: 100%;
     }
+    .scriptTagChip {
+      display: inline-block; font-size: 9px; padding: 0 5px; border-radius: 8px;
+      background: var(--bg3); color: var(--fg2); margin-left: 3px;
+      font-weight: 600; vertical-align: middle;
+    }
+    .metaItem {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 8px; margin: 2px; border-radius: 12px; font-size: 12px;
+      background: var(--bg3); border: 1px solid var(--border);
+    }
+    .metaItem .metaDel {
+      cursor: pointer; font-size: 14px; color: var(--fg3); margin-left: 2px;
+    }
+    .metaItem .metaDel:hover { color: var(--red); }
+    .metaDot {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+    }
 
     /* ── Script info card ────────────────────────── */
     #scriptInfoCard {
@@ -402,6 +419,28 @@
               <span class="flink" onclick="newVar();return false;">+ New Variable</span>
             </div>
         </div>
+        <div class="infoBar">Manage Categories &amp; Tags</div>
+        <div id="metaManager" class="infoContent">
+            <div style="padding: 10px; display: flex; gap: 24px;">
+              <div style="flex:1;">
+                <div style="font-weight:700; font-size:12px; margin-bottom:6px;">Categories</div>
+                <div id="metaCatList"></div>
+                <div style="margin-top:6px; display:flex; gap:4px;">
+                  <input type="text" id="newCatName" placeholder="New category" style="padding:4px 6px; font-size:12px; border:1px solid var(--border2); border-radius:4px; width:120px;" />
+                  <input type="color" id="newCatColor" value="#3b82f6" style="width:30px; height:26px; border:none; cursor:pointer;" />
+                  <button class="arBtnSm" onclick="addMeta('category');">Add</button>
+                </div>
+              </div>
+              <div style="flex:1;">
+                <div style="font-weight:700; font-size:12px; margin-bottom:6px;">Tags</div>
+                <div id="metaTagList"></div>
+                <div style="margin-top:6px; display:flex; gap:4px;">
+                  <input type="text" id="newTagName" placeholder="New tag" style="padding:4px 6px; font-size:12px; border:1px solid var(--border2); border-radius:4px; width:120px;" />
+                  <button class="arBtnSm" onclick="addMeta('tag');">Add</button>
+                </div>
+              </div>
+            </div>
+        </div>
       </div>
     </div>
   </div>
@@ -422,6 +461,9 @@ var draggedId = null;
 var nodesObj = {};
 var variables = [];
 var varScopes = { global: 'Global', script: 'Script', mesh: 'Mesh', node: 'Node' };
+var metaCategories = [];
+var metaTags = [];
+window._innovoMeta = { categories: [], tags: [] }; // shared with editor popup
 
 function escHtml(s) {
     if (!s) return '';
@@ -458,6 +500,11 @@ function filterScriptTree() {
         el.style.display = visiblePaths[fpath] ? '' : 'none';
     });
 }
+function getCatColor(name) {
+    if (!name) return '';
+    var cat = metaCategories.filter(function(c) { return c.name === name; })[0];
+    return cat ? cat.color : '';
+}
 function onlyUnique(value, index, self) {
     return self.indexOf(value) === index;
 }
@@ -477,9 +524,12 @@ function updateScriptInfoCard(el) {
     Q('siName').textContent = name;
     Q('siType').textContent = ftype;
     var catEl = Q('siCat');
-    if (cat) { catEl.textContent = cat; catEl.setAttribute('data-cat', cat); catEl.style.display = ''; }
+    var catColor = getCatColor(cat);
+    if (cat) { catEl.textContent = cat; catEl.setAttribute('data-cat', cat); if (catColor) catEl.style.background = catColor; catEl.style.display = ''; }
     else { catEl.style.display = 'none'; }
-    Q('siDesc').textContent = desc || 'No description';
+    var tags = (el.getAttribute('x-data-tags') || '').split(',').filter(function(t) { return t; });
+    var tagsHtml = tags.map(function(t) { return '<span class="scriptTagChip" style="font-size:11px;padding:1px 6px;">' + escHtml(t) + '</span>'; }).join('');
+    Q('siDesc').innerHTML = (desc ? escHtml(desc) : '<span style="color:var(--fg3)">No description</span>') + (tagsHtml ? '<div style="margin-top:4px;">' + tagsHtml + '</div>' : '');
     card.style.display = '';
 }
 // Parse raw tags into structured info
@@ -722,6 +772,7 @@ function doOnLoad() {
   updateNodesTable();
   parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadNodeHistory', 'nodeId': parent.currentNode._id });
   parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadVariables', 'nodeId': parent.currentNode._id });
+  parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadMeta' });
 }
 
 function selectPreviouslySelectedScript() {
@@ -762,7 +813,7 @@ function goEdit() {
       var scriptId = selScript[0].getAttribute('x-data-id');
       window.open('/pluginadmin.ashx?pin=innovoscripttask&user=1&edit=1&id=' + scriptId, '_blank');
       window.callback = function(sd) {
-          parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'editScript', 'scriptId': sd._id, 'scriptType': sd.type, 'scriptName': sd.name, 'scriptContent': sd.content, 'scriptDescription': sd.description, 'scriptCategory': sd.category, 'currentNodeId': parent.currentNode._id });
+          parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'editScript', 'scriptId': sd._id, 'scriptType': sd.type, 'scriptName': sd.name, 'scriptContent': sd.content, 'scriptDescription': sd.description, 'scriptCategory': sd.category, 'scriptTags': sd.tags || [], 'currentNodeId': parent.currentNode._id });
       };
     } else {
       parent.setDialogMode(2, "Oops!", 1, null, 'No script has been selected to edit.');
@@ -852,10 +903,13 @@ function redrawScriptTree() {
       indent += 1;
     }
     if (f.type != 'folder') {
-        var catBadge = (f.category) ? ' <span class="catBadge" data-cat="' + escHtml(f.category) + '">' + escHtml(f.category) + '</span>' : '';
+        var catColor = getCatColor(f.category);
+        var catBadge = (f.category) ? ' <span class="catBadge" data-cat="' + escHtml(f.category) + '"' + (catColor ? ' style="background:' + catColor + '"' : '') + '>' + escHtml(f.category) + '</span>' : '';
+        var tagChips = '';
+        if (f.tags && f.tags.length) { f.tags.forEach(function(t) { tagChips += '<span class="scriptTagChip">' + escHtml(t) + '</span>'; }); }
         var descTitle = (f.description) ? ' title="' + escHtml(f.description) + '"' : '';
         var descLine = (f.description) ? '<div class="scriptDesc" style="padding-left: ' + (indent * 16 + 24) + 'px;">' + escHtml(f.description) + '</div>' : '';
-        str += '<div id="' + f._id + '" draggable="true" x-data-path="' + f.path + '" x-data-id="' + f._id + '" x-data-folder="' + folder_id + '" x-data-category="' + escHtml(f.category || '') + '" x-data-description="' + escHtml(f.description || '') + '" style="padding-left: ' + (indent * 16) + 'px;" class="liscript"' + descTitle + ' onclick="goScript(this);"><svg class="script-icon" viewBox="0 0 16 16"><path d="M5.5 7a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1zM5 9.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5"/><path d="M9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.5zm0 1v2A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/></svg><span class="fname">' + f.name + '</span> <span class="ftype">' + f.filetype + '</span>' + catBadge + '</div>' + descLine;
+        str += '<div id="' + f._id + '" draggable="true" x-data-path="' + f.path + '" x-data-id="' + f._id + '" x-data-folder="' + folder_id + '" x-data-category="' + escHtml(f.category || '') + '" x-data-tags="' + escHtml((f.tags || []).join(',')) + '" x-data-description="' + escHtml(f.description || '') + '" style="padding-left: ' + (indent * 16) + 'px;" class="liscript"' + descTitle + ' onclick="goScript(this);"><svg class="script-icon" viewBox="0 0 16 16"><path d="M5.5 7a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1zM5 9.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5"/><path d="M9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.5zm0 1v2A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/></svg><span class="fname">' + f.name + '</span> <span class="ftype">' + f.filetype + '</span>' + catBadge + tagChips + '</div>' + descLine;
     }
   });
   str += '</div>';
@@ -1084,6 +1138,52 @@ function redrawScriptTree() {
       nh.actionTxt = '<span class="delSched" onclick="deleteSchedule(this);">Delete</span>';
       return nh;
   }
+  parent.pluginHandler.innovoscripttask.loadMeta = function(message) {
+      metaCategories = message.event.categories || [];
+      metaTags = message.event.tags || [];
+      window._innovoMeta = { categories: metaCategories, tags: metaTags };
+      // Rebuild category filter dropdown
+      var catFilter = Q('categoryFilter');
+      var curVal = catFilter.value;
+      catFilter.innerHTML = '<option value="">All</option>';
+      metaCategories.forEach(function(c) {
+          var opt = document.createElement('option');
+          opt.value = c.name; opt.textContent = c.name;
+          catFilter.appendChild(opt);
+      });
+      catFilter.value = curVal;
+      // Rebuild meta manager
+      renderMetaManager();
+  }
+  function renderMetaManager() {
+      var catList = Q('metaCatList'); catList.innerHTML = '';
+      metaCategories.forEach(function(c) {
+          var el = document.createElement('span');
+          el.className = 'metaItem';
+          el.innerHTML = '<span class="metaDot" style="background:' + (c.color || '#888') + '"></span>' + escHtml(c.name) + '<span class="metaDel" data-id="' + c._id + '" onclick="deleteMeta(this);">&times;</span>';
+          catList.appendChild(el);
+      });
+      var tagList = Q('metaTagList'); tagList.innerHTML = '';
+      metaTags.forEach(function(t) {
+          var el = document.createElement('span');
+          el.className = 'metaItem';
+          el.innerHTML = escHtml(t.name) + '<span class="metaDel" data-id="' + t._id + '" onclick="deleteMeta(this);">&times;</span>';
+          tagList.appendChild(el);
+      });
+  }
+  function addMeta(metaType) {
+      var nameInput = (metaType === 'category') ? Q('newCatName') : Q('newTagName');
+      var name = nameInput.value.trim();
+      if (!name) return;
+      var color = (metaType === 'category') ? Q('newCatColor').value : '';
+      parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'addMeta', metaType: metaType, name: name, color: color });
+      nameInput.value = '';
+  }
+  function deleteMeta(el) {
+      var id = el.getAttribute('data-id');
+      parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'deleteMeta', id: id });
+  }
+
   function secondsToHms(d) {
     d = Number(d);
     if (d == 0) return "immediately";
