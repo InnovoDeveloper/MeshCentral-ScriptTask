@@ -21,6 +21,8 @@ module.exports.innovoscripttask = function (parent) {
         'historyData',
         'variableData',
         'metaData',
+        'batchProgress',
+        'batchRunList',
         'malix_triggerOption'
     ];
     
@@ -39,6 +41,8 @@ module.exports.innovoscripttask = function (parent) {
         obj.meshServer.pluginHandler.innovoscripttask_db = require (__dirname + '/db.js').CreateDB(obj.meshServer);
         obj.db = obj.meshServer.pluginHandler.innovoscripttask_db;
         obj.resetQueueTimer();
+        // Delay batch manager init to let DB connect first
+        setTimeout(function() { obj.initBatchManager(); }, 5000);
     };
     
     obj.onDeviceRefreshEnd = function() {
@@ -128,11 +132,317 @@ module.exports.innovoscripttask = function (parent) {
     
     obj.cleanHistory = function() {
         if (Math.round(Math.random() * 100) == 99) {
-            //obj.debug('Plugin', 'ScriptTask', 'Running history cleanup');
             obj.db.deleteOldHistory();
         }
     };
-    
+
+    // ========================================================================
+    // BATCH DEPLOYMENT MANAGER
+    // ========================================================================
+    obj.batchTimer = null;
+
+    obj.initBatchManager = function() {
+        // Tick every 10 seconds to check active batch runs
+        obj.batchTimer = setInterval(obj.batchTick, 10 * 1000);
+        // Recover active batches after server restart
+        obj.db.getActiveBatchRuns()
+        .then(function(runs) {
+            if (runs.length > 0) {
+                console.log('PLUGIN: InnovoScriptTask: Recovering ' + runs.length + ' active batch run(s)');
+                var now = Math.floor(Date.now() / 1000);
+                runs.forEach(function(run) {
+                    // If nextBatchAt is past due, schedule it for 10s from now
+                    if (run.nextBatchAt && run.nextBatchAt < now) {
+                        obj.db.updateBatchRun(run._id, { nextBatchAt: now + 10 });
+                    }
+                });
+            }
+        })
+        .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: Batch recovery error:', e); });
+    };
+
+    obj.batchTick = function() {
+        var now = Math.floor(Date.now() / 1000);
+        obj.db.getActiveBatchRuns()
+        .then(function(runs) {
+            runs.forEach(function(run) {
+                // Check if it's time for the next batch
+                if (run.nextBatchAt && run.nextBatchAt <= now) {
+                    if (run.currentBatchIndex >= run.totalBatches) {
+                        // All batches dispatched — check if all nodes are done
+                        var stillRunning = run.nodes.filter(function(n) { return n.status === 'dispatched' || n.status === 'queued'; });
+                        if (stillRunning.length === 0) {
+                            obj.completeBatchRun(run);
+                        }
+                        return;
+                    }
+                    obj.dispatchBatch(run);
+                }
+                // Check for stale dispatched nodes (dispatched > 10 min ago, no completion)
+                var staleThreshold = now - 600;
+                var staleFound = false;
+                run.nodes.forEach(function(n) {
+                    if (n.status === 'dispatched' && n.dispatchTime && n.dispatchTime < staleThreshold) {
+                        n.status = 'error';
+                        n.errorVal = 'Timeout: no response from agent';
+                        staleFound = true;
+                    }
+                });
+                if (staleFound) {
+                    obj.recalcBatchCounts(run);
+                    obj.db.updateBatchRun(run._id, { nodes: run.nodes, counts: run.counts });
+                    obj.sendBatchProgress(run);
+                }
+            });
+        })
+        .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: Batch tick error:', e); });
+    };
+
+    obj.dispatchBatch = function(run) {
+        var batchIndex = run.currentBatchIndex;
+        var nodesInBatch = run.nodes.filter(function(n) { return n.batchIndex === batchIndex; });
+        var onlineAgents = Object.keys(obj.meshServer.webserver.wsagents);
+        var now = Math.floor(Date.now() / 1000);
+        var delay = 0;
+        var staggerMs = (run.staggerSec || 2) * 1000;
+
+        console.log('PLUGIN: InnovoScriptTask: Batch ' + (batchIndex + 1) + '/' + run.totalBatches + ' — dispatching ' + nodesInBatch.length + ' nodes (stagger: ' + run.staggerSec + 's)');
+
+        // Get the script first
+        obj.db.get(run.scriptId)
+        .then(function(scripts) {
+            var script = scripts[0];
+            if (!script || !script.content) {
+                console.log('PLUGIN: InnovoScriptTask: Batch run script not found: ' + run.scriptId);
+                obj.db.updateBatchRun(run._id, { status: 'error' });
+                return;
+            }
+
+            nodesInBatch.forEach(function(nodeEntry) {
+                // Check if device is online
+                if (onlineAgents.indexOf(nodeEntry.nodeId) === -1) {
+                    // Offline handling
+                    if (run.offlinePolicy === 'defer' && batchIndex < run.totalBatches - 1) {
+                        nodeEntry.batchIndex = batchIndex + 1; // Move to next batch
+                        nodeEntry.deferCount = (nodeEntry.deferCount || 0) + 1;
+                        if (nodeEntry.deferCount >= 3) {
+                            nodeEntry.status = 'skipped';
+                            nodeEntry.errorVal = 'Offline after 3 defer attempts';
+                        }
+                    } else {
+                        nodeEntry.status = 'skipped';
+                        nodeEntry.errorVal = 'Device offline at dispatch time';
+                    }
+                    return;
+                }
+
+                // Schedule staggered dispatch
+                (function(ne, delayMs) {
+                    setTimeout(function() {
+                        var dispatchTime = Math.floor(Date.now() / 1000);
+                        // Create the job
+                        obj.db.addJob({
+                            scriptId: run.scriptId,
+                            scriptName: run.scriptName,
+                            node: ne.nodeId,
+                            runBy: run.createdBy,
+                            batchRunId: run._id,
+                            dispatchTime: dispatchTime // Set immediately so queueRun skips it
+                        })
+                        .then(function(result) {
+                            var jobId = result.insertedId || (result.ops && result.ops[0] && result.ops[0]._id);
+                            ne.jobId = jobId;
+                            ne.status = 'dispatched';
+                            ne.dispatchTime = dispatchTime;
+
+                            // Dispatch to agent
+                            try {
+                                var jObj = {
+                                    action: 'plugin',
+                                    plugin: 'innovoscripttask',
+                                    pluginaction: 'triggerJob',
+                                    jobId: jobId,
+                                    scriptId: run.scriptId,
+                                    replaceVars: {},
+                                    scriptHash: script.contentHash,
+                                    dispatchTime: dispatchTime
+                                };
+                                obj.meshServer.webserver.wsagents[ne.nodeId].send(JSON.stringify(jObj));
+                            } catch (e) {
+                                ne.status = 'error';
+                                ne.errorVal = 'Dispatch failed: ' + e.message;
+                            }
+
+                            // Update batch run in DB
+                            obj.recalcBatchCounts(run);
+                            obj.db.updateBatchRun(run._id, { nodes: run.nodes, counts: run.counts });
+                        })
+                        .catch(function(e) {
+                            ne.status = 'error';
+                            ne.errorVal = 'Job creation failed: ' + e.message;
+                        });
+                    }, delayMs);
+                })(nodeEntry, delay);
+
+                delay += staggerMs;
+            });
+
+            // Update batch run state
+            var nextBatchAt = now + run.batchIntervalSec;
+            obj.db.updateBatchRun(run._id, {
+                currentBatchIndex: batchIndex + 1,
+                lastBatchStartedAt: now,
+                nextBatchAt: nextBatchAt,
+                nodes: run.nodes
+            });
+
+            // Send progress after stagger completes
+            setTimeout(function() {
+                obj.recalcBatchCounts(run);
+                obj.db.updateBatchRun(run._id, { counts: run.counts, nodes: run.nodes });
+                obj.sendBatchProgress(run);
+            }, delay + 1000);
+        })
+        .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: Batch dispatch error:', e); });
+    };
+
+    obj.onBatchJobComplete = function(jobId, batchRunId, retVal, errVal) {
+        obj.db.getBatchRun(batchRunId)
+        .then(function(runs) {
+            if (runs.length === 0) return;
+            var run = runs[0];
+            var now = Math.floor(Date.now() / 1000);
+            // Find the node entry and update it
+            for (var i = 0; i < run.nodes.length; i++) {
+                var jobIdStr = (run.nodes[i].jobId || '').toString();
+                var matchId = (jobId || '').toString();
+                if (jobIdStr === matchId) {
+                    run.nodes[i].status = errVal ? 'error' : 'completed';
+                    run.nodes[i].completeTime = now;
+                    run.nodes[i].returnVal = retVal ? (retVal.length > 500 ? retVal.substring(0, 497) + '...' : retVal) : null;
+                    run.nodes[i].errorVal = errVal || null;
+                    break;
+                }
+            }
+            obj.recalcBatchCounts(run);
+            obj.db.updateBatchRun(run._id, { nodes: run.nodes, counts: run.counts });
+            obj.sendBatchProgress(run);
+
+            // Check if all batches dispatched and all nodes done
+            if (run.currentBatchIndex >= run.totalBatches) {
+                var stillRunning = run.nodes.filter(function(n) { return n.status === 'dispatched' || n.status === 'queued'; });
+                if (stillRunning.length === 0) {
+                    obj.completeBatchRun(run);
+                }
+            }
+        })
+        .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: Batch job complete error:', e); });
+    };
+
+    obj.completeBatchRun = function(run) {
+        var now = Math.floor(Date.now() / 1000);
+        obj.recalcBatchCounts(run);
+        run.status = 'completed';
+        run.completedAt = now;
+        obj.db.updateBatchRun(run._id, { status: 'completed', completedAt: now, counts: run.counts, nodes: run.nodes });
+        obj.sendBatchProgress(run);
+        console.log('PLUGIN: InnovoScriptTask: Batch run completed — ' + run.counts.completed + ' ok, ' + run.counts.errored + ' failed, ' + run.counts.skipped + ' skipped');
+    };
+
+    obj.recalcBatchCounts = function(run) {
+        var c = { total: run.nodes.length, pending: 0, queued: 0, dispatched: 0, completed: 0, errored: 0, skipped: 0 };
+        run.nodes.forEach(function(n) {
+            if (n.status === 'pending') c.pending++;
+            else if (n.status === 'queued') c.queued++;
+            else if (n.status === 'dispatched') c.dispatched++;
+            else if (n.status === 'completed') c.completed++;
+            else if (n.status === 'error') c.errored++;
+            else if (n.status === 'skipped') c.skipped++;
+        });
+        run.counts = c;
+    };
+
+    obj.sendBatchProgress = function(run) {
+        var targets = ['*', 'server-users'];
+        obj.meshServer.DispatchEvent(targets, obj, {
+            nolog: true, action: 'plugin', plugin: 'innovoscripttask',
+            pluginaction: 'batchProgress', batchRun: run
+        });
+    };
+
+    obj.startBatchRun = function(command, user) {
+        var nodeIds = command.nodes;
+        var batchSize = Math.max(1, parseInt(command.batchSize) || 25);
+        var batchIntervalSec = Math.max(30, parseInt(command.batchIntervalSec) || 300);
+        var staggerSec = Math.max(1, parseInt(command.staggerSec) || 2);
+        var offlinePolicy = command.offlinePolicy || 'skip';
+        var now = Math.floor(Date.now() / 1000);
+
+        // Check max concurrent batch runs
+        obj.db.getActiveBatchRuns()
+        .then(function(active) {
+            if (active.length >= 2) {
+                console.log('PLUGIN: InnovoScriptTask: Cannot start batch — 2 already active');
+                return;
+            }
+
+            // Build node entries and assign batch indices
+            var nodes = [];
+            for (var i = 0; i < nodeIds.length; i++) {
+                var batchIdx = Math.floor(i / batchSize);
+                // Resolve device name from live data
+                var nodeName = nodeIds[i];
+                try {
+                    var agent = obj.meshServer.webserver.wsagents[nodeIds[i]];
+                    if (agent && agent.dbNodeKey) {
+                        // Try to get name from meshserver nodes
+                    }
+                } catch(e) {}
+                nodes.push({
+                    nodeId: nodeIds[i],
+                    nodeName: command.nodeNames ? (command.nodeNames[i] || nodeIds[i]) : nodeIds[i],
+                    status: 'pending',
+                    batchIndex: batchIdx,
+                    jobId: null,
+                    errorVal: null,
+                    returnVal: null,
+                    dispatchTime: null,
+                    completeTime: null,
+                    deferCount: 0
+                });
+            }
+
+            var totalBatches = Math.ceil(nodeIds.length / batchSize);
+
+            var batchRun = {
+                scriptId: command.scriptId,
+                scriptName: command.scriptName || '',
+                createdBy: user,
+                createdAt: now,
+                batchSize: batchSize,
+                batchIntervalSec: batchIntervalSec,
+                staggerSec: staggerSec,
+                offlinePolicy: offlinePolicy,
+                status: 'active',
+                currentBatchIndex: 0,
+                totalBatches: totalBatches,
+                nodes: nodes,
+                counts: { total: nodes.length, pending: nodes.length, queued: 0, dispatched: 0, completed: 0, errored: 0, skipped: 0 },
+                lastBatchStartedAt: null,
+                nextBatchAt: now, // Start first batch immediately
+                completedAt: null
+            };
+
+            return obj.db.addBatchRun(batchRun)
+            .then(function() {
+                console.log('PLUGIN: InnovoScriptTask: Batch run started — ' + nodes.length + ' nodes, ' + totalBatches + ' batches of ' + batchSize + ', interval ' + batchIntervalSec + 's, stagger ' + staggerSec + 's');
+                obj.sendBatchProgress(batchRun);
+            });
+        })
+        .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: Start batch error:', e); });
+    };
+    // ========================================================================
+
     obj.downloadFile = function(req, res, user) {
         var id = req.query.dl;
         obj.db.get(id)
@@ -259,6 +569,14 @@ module.exports.innovoscripttask = function (parent) {
 
     obj.metaData = function (message) {
         if (typeof pluginHandler.innovoscripttask.loadMeta == 'function') pluginHandler.innovoscripttask.loadMeta(message);
+    };
+
+    obj.batchProgress = function (message) {
+        if (typeof pluginHandler.innovoscripttask.batchProgress == 'function') pluginHandler.innovoscripttask.batchProgress(message);
+    };
+
+    obj.batchRunList = function (message) {
+        if (typeof pluginHandler.innovoscripttask.batchRunList == 'function') pluginHandler.innovoscripttask.batchRunList(message);
     };
 
     obj.determineNextJobTime = function(s) {
@@ -691,9 +1009,15 @@ module.exports.innovoscripttask = function (parent) {
                 })
                 .then(() => {
                     obj.updateFrontEnd( { scriptId: command.scriptId, nodeId: myparent.dbNodeKey } );
+                    // Check if this job belongs to a batch run
+                    return obj.db.get(jobId);
+                })
+                .then((jobs) => {
+                    if (jobs && jobs.length > 0 && jobs[0].batchRunId) {
+                        obj.onBatchJobComplete(jobId, jobs[0].batchRunId, retVal, errVal);
+                    }
                 })
                 .catch(e => { console.log('PLUGIN: InnovoScriptTask: Failed to complete job. ', e); });
-                // update front end by eventing
             break;
             case 'loadNodeHistory':
                 obj.updateFrontEnd( { nodeId: command.nodeId } );
@@ -754,6 +1078,58 @@ module.exports.innovoscripttask = function (parent) {
             case 'deleteMeta':
                 obj.db.deleteMeta(command.id)
                 .then(() => { obj.updateFrontEnd( { meta: true, tree: true } ); });
+            break;
+            // ── Batch Deployment actions ──────────────────────
+            case 'startBatchRun':
+                obj.startBatchRun(command, myparent.user.name);
+            break;
+            case 'cancelBatchRun':
+                obj.db.getBatchRun(command.id)
+                .then(function(runs) {
+                    if (runs.length === 0) return;
+                    var run = runs[0];
+                    run.status = 'cancelled';
+                    obj.db.updateBatchRun(run._id, { status: 'cancelled' });
+                    obj.db.deletePendingBatchJobs(run._id);
+                    obj.sendBatchProgress(run);
+                });
+            break;
+            case 'pauseBatchRun':
+                obj.db.updateBatchRun(command.id, { status: 'paused' });
+                obj.db.getBatchRun(command.id).then(function(runs) { if (runs.length) obj.sendBatchProgress(runs[0]); });
+            break;
+            case 'resumeBatchRun':
+                var now = Math.floor(Date.now() / 1000);
+                obj.db.updateBatchRun(command.id, { status: 'active', nextBatchAt: now + 10 });
+                obj.db.getBatchRun(command.id).then(function(runs) { if (runs.length) obj.sendBatchProgress(runs[0]); });
+            break;
+            case 'loadBatchRuns':
+                obj.db.getRecentBatchRuns(10)
+                .then(function(runs) {
+                    var targets = ['*', 'server-users'];
+                    obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'batchRunList', batchRuns: runs });
+                });
+            break;
+            case 'retryFailedBatch':
+                obj.db.getBatchRun(command.id)
+                .then(function(runs) {
+                    if (runs.length === 0) return;
+                    var run = runs[0];
+                    var failedNodes = run.nodes.filter(function(n) { return n.status === 'error' || n.status === 'skipped'; });
+                    if (failedNodes.length === 0) return;
+                    // Create new batch run with only failed nodes
+                    var retryCmd = {
+                        scriptId: run.scriptId,
+                        scriptName: run.scriptName,
+                        nodes: failedNodes.map(function(n) { return n.nodeId; }),
+                        nodeNames: failedNodes.map(function(n) { return n.nodeName; }),
+                        batchSize: run.batchSize,
+                        batchIntervalSec: run.batchIntervalSec,
+                        staggerSec: run.staggerSec,
+                        offlinePolicy: run.offlinePolicy
+                    };
+                    obj.startBatchRun(retryCmd, myparent.user.name);
+                });
             break;
             default:
                 console.log('PLUGIN: InnovoScriptTask: unknown action');

@@ -286,6 +286,32 @@
     #arColumns label { display: block; font-size: 12px; padding: 2px 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #arColumns label:hover { color: var(--accent); }
 
+    /* ── Batch deployment cards ─────────────────── */
+    .batchCard {
+      border: 1px solid var(--border); border-radius: var(--radius);
+      margin-bottom: 8px; overflow: hidden;
+    }
+    .batchCardHeader {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 12px; background: var(--bg2); font-size: 12px; font-weight: 600;
+    }
+    .batchCardBody { padding: 8px 12px; font-size: 12px; }
+    .batchProgress { height: 14px; background: var(--bg3); border-radius: 7px; overflow: hidden; display: flex; }
+    .batchProgress > div { height: 100%; transition: width 0.3s; }
+    .batchProgress .bp-ok { background: var(--green); }
+    .batchProgress .bp-err { background: var(--red); }
+    .batchProgress .bp-run { background: var(--yellow); }
+    .batchProgress .bp-skip { background: #9ca3af; }
+    .batchCounts { display: flex; gap: 12px; margin-top: 6px; font-size: 11px; }
+    .batchCounts span { display: flex; align-items: center; gap: 3px; }
+    .batchCounts .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .batchBtns { display: flex; gap: 4px; margin-top: 6px; }
+    .batchBtns button { font-size: 11px; padding: 2px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border2); background: var(--bg); color: var(--fg); cursor: pointer; }
+    .batchBtns button:hover { border-color: var(--accent); color: var(--accent); }
+    .batchNodeList { max-height: 200px; overflow-y: auto; margin-top: 6px; font-size: 11px; border-top: 1px solid var(--border); padding-top: 4px; }
+    .batchNodeRow { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid var(--border); }
+    .batchNodeRow:hover { background: var(--bg2); }
+
     /* ── Device tooltip ──────────────────────────── */
     #arTooltip {
       display: none; position: fixed; z-index: 9999;
@@ -394,7 +420,8 @@
                 <span id="arVersionFilters"></span>
                 <button class="arBtnSm" onclick="selVisibleNodes(true);">Select Visible</button>
                 <button class="arBtnSm" onclick="selVisibleNodes(false);">Deselect Visible</button>
-                <button onclick="goAdvancedRun();">Run / Schedule</button>
+                <button onclick="goAdvancedRun();">Schedule</button>
+                <button class="tbtn primary" style="padding:4px 12px;font-size:11px;" onclick="goBatchDeploy();">Batch Deploy</button>
               </div>
               <div style="padding: 4px 12px; font-size: 11px; color: var(--fg3);">
                 <label style="display:inline;"><input type="checkbox" onclick="selAllNodes(this);"> Select All</label>
@@ -420,6 +447,10 @@
               </div>
               <!-- Hidden table for backwards compat with checkbox queries -->
               <table id="mRunTbl" style="display:none;" cellspacing="0" cellpadding="0"></table>
+          </div>
+          <div class="infoBar">Batch Deployments</div>
+          <div id="batchRuns" class="infoContent" style="padding:8px;">
+              <div id="batchRunList"><span style="color:var(--fg3);font-size:12px;">No batch deployments yet.</span></div>
           </div>
           <div class="infoBar">Node Schedules</div>
           <div id="nSch" class="infoContent">
@@ -926,6 +957,7 @@ function doOnLoad() {
   parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadNodeHistory', 'nodeId': parent.currentNode._id });
   parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadVariables', 'nodeId': parent.currentNode._id });
   parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadMeta' });
+  parent.meshserver.send({ 'action': 'plugin', 'plugin': 'innovoscripttask', 'pluginaction': 'loadBatchRuns' });
 }
 
 function selectPreviouslySelectedScript() {
@@ -1005,6 +1037,111 @@ function openSection(sectionId) {
     section.style.maxHeight = '300px';
     section.style.overflowY = 'auto';
     resizeIframe();
+}
+
+// ── Batch Deployment ─────────────────────────────
+function goBatchDeploy() {
+    var cboxes = document.querySelectorAll('#arNodeList input[name="runOn[]"]');
+    var sel = []; var selNames = [];
+    cboxes.forEach(function(n) {
+        if (n.checked) {
+            sel.push(n.value);
+            var lbl = n.closest('.arNodeItem');
+            selNames.push(lbl ? lbl.textContent.trim() : n.value);
+        }
+    });
+    if (sel.length === 0) { parent.setDialogMode(2, "Oops!", 1, null, 'No devices selected.'); return; }
+    var selScript = document.querySelectorAll('.liselected');
+    if (!selScript.length) { parent.setDialogMode(2, "Oops!", 1, null, 'No script selected.'); return; }
+    var scriptId = selScript[0].getAttribute('x-data-id');
+    var scriptName = (selScript[0].querySelector('.fname') || {}).textContent || '';
+
+    var totalBatches = function(size) { return Math.ceil(sel.length / Math.max(1, size)); };
+    var html = '<div style="font-size:13px;">';
+    html += '<b>' + escHtml(scriptName) + '</b> on <b>' + sel.length + '</b> devices<br/><br/>';
+    html += '<table style="width:100%">';
+    html += '<tr><td style="width:140px">Batch size:</td><td><input type="number" id="batchSize" value="25" min="1" max="' + sel.length + '" style="width:80px" oninput="Q(\'batchSummary\').textContent=Math.ceil(' + sel.length + '/Math.max(1,this.value))+\' batches\'" /> <span id="batchSummary">' + totalBatches(25) + ' batches</span></td></tr>';
+    html += '<tr><td>Interval between batches:</td><td><select id="batchInterval"><option value="60">1 minute</option><option value="120">2 minutes</option><option value="300" selected>5 minutes</option><option value="600">10 minutes</option><option value="1800">30 minutes</option></select></td></tr>';
+    html += '<tr><td>Stagger per device:</td><td><select id="batchStagger"><option value="1">1 second</option><option value="2" selected>2 seconds</option><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="10">10 seconds</option></select></td></tr>';
+    html += '<tr><td>Offline devices:</td><td><select id="batchOffline"><option value="skip">Skip</option><option value="defer">Defer to next batch</option></select></td></tr>';
+    html += '</table></div>';
+
+    parent.setDialogMode(2, "Batch Deploy", 3, function() {
+        var batchSize = parseInt(parent.document.getElementById('batchSize').value) || 25;
+        var batchInterval = parseInt(parent.document.getElementById('batchInterval').value) || 300;
+        var batchStagger = parseInt(parent.document.getElementById('batchStagger').value) || 2;
+        var offlinePolicy = parent.document.getElementById('batchOffline').value || 'skip';
+        parent.meshserver.send({
+            action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'startBatchRun',
+            scriptId: scriptId, scriptName: scriptName,
+            nodes: sel, nodeNames: selNames,
+            batchSize: batchSize, batchIntervalSec: batchInterval,
+            staggerSec: batchStagger, offlinePolicy: offlinePolicy
+        });
+        openSection('batchRuns');
+    }, html);
+}
+
+function renderBatchCard(run) {
+    var c = run.counts || {};
+    var total = c.total || 1;
+    var pctOk = Math.round((c.completed / total) * 100);
+    var pctErr = Math.round((c.errored / total) * 100);
+    var pctRun = Math.round((c.dispatched / total) * 100);
+    var pctSkip = Math.round((c.skipped / total) * 100);
+    var batchId = (run._id || '').toString();
+    var elapsed = '';
+    if (run.createdAt) {
+        var secs = Math.floor(Date.now() / 1000) - run.createdAt;
+        var m = Math.floor(secs / 60), s = secs % 60;
+        elapsed = m + 'm ' + s + 's';
+    }
+    var statusBadge = '<span class="st-badge ' + run.status + '">' + run.status + '</span>';
+    var nextBatchTxt = '';
+    if (run.status === 'active' && run.nextBatchAt && run.currentBatchIndex < run.totalBatches) {
+        var secsLeft = Math.max(0, run.nextBatchAt - Math.floor(Date.now() / 1000));
+        nextBatchTxt = ' — next batch in ' + Math.floor(secsLeft / 60) + 'm ' + (secsLeft % 60) + 's';
+    }
+
+    var html = '<div class="batchCard" id="batch_' + batchId + '">';
+    html += '<div class="batchCardHeader"><span>' + escHtml(run.scriptName) + ' — ' + statusBadge + '</span><span style="color:var(--fg3)">' + elapsed + '</span></div>';
+    html += '<div class="batchCardBody">';
+    html += '<div style="margin-bottom:4px;font-size:11px;color:var(--fg2);">Batch ' + Math.min(run.currentBatchIndex + 1, run.totalBatches) + '/' + run.totalBatches + ' (size ' + run.batchSize + ', stagger ' + run.staggerSec + 's)' + nextBatchTxt + '</div>';
+    html += '<div class="batchProgress"><div class="bp-ok" style="width:' + pctOk + '%"></div><div class="bp-err" style="width:' + pctErr + '%"></div><div class="bp-run" style="width:' + pctRun + '%"></div><div class="bp-skip" style="width:' + pctSkip + '%"></div></div>';
+    html += '<div class="batchCounts">';
+    html += '<span><span class="dot" style="background:var(--green)"></span> ' + (c.completed || 0) + ' ok</span>';
+    html += '<span><span class="dot" style="background:var(--red)"></span> ' + (c.errored || 0) + ' failed</span>';
+    html += '<span><span class="dot" style="background:var(--yellow)"></span> ' + (c.dispatched || 0) + ' running</span>';
+    html += '<span><span class="dot" style="background:#9ca3af"></span> ' + (c.skipped || 0) + ' skipped</span>';
+    html += '<span><span class="dot" style="background:var(--bg3)"></span> ' + (c.pending || 0) + ' pending</span>';
+    html += '</div>';
+
+    // Buttons
+    if (run.status === 'active') {
+        html += '<div class="batchBtns"><button onclick="batchAction(\'pauseBatchRun\',\'' + batchId + '\')">Pause</button><button onclick="batchAction(\'cancelBatchRun\',\'' + batchId + '\')">Cancel</button></div>';
+    } else if (run.status === 'paused') {
+        html += '<div class="batchBtns"><button onclick="batchAction(\'resumeBatchRun\',\'' + batchId + '\')">Resume</button><button onclick="batchAction(\'cancelBatchRun\',\'' + batchId + '\')">Cancel</button></div>';
+    } else if (run.status === 'completed' || run.status === 'cancelled') {
+        if ((c.errored || 0) + (c.skipped || 0) > 0) {
+            html += '<div class="batchBtns"><button onclick="batchAction(\'retryFailedBatch\',\'' + batchId + '\')">Retry Failed (' + ((c.errored||0)+(c.skipped||0)) + ')</button></div>';
+        }
+    }
+
+    // Node list (expandable)
+    html += '<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:11px;color:var(--accent);">Show devices (' + total + ')</summary>';
+    html += '<div class="batchNodeList">';
+    (run.nodes || []).forEach(function(n) {
+        var stClass = n.status === 'completed' ? 'color:var(--green)' : n.status === 'error' ? 'color:var(--red)' : n.status === 'skipped' ? 'color:#9ca3af' : n.status === 'dispatched' ? 'color:var(--yellow)' : 'color:var(--fg3)';
+        var detail = n.errorVal ? ' — ' + escHtml(n.errorVal).substring(0, 80) : n.returnVal ? ' — ' + escHtml(n.returnVal).substring(0, 60) : '';
+        html += '<div class="batchNodeRow"><span>' + escHtml(n.nodeName || n.nodeId) + '</span><span style="' + stClass + '">' + n.status + detail + '</span></div>';
+    });
+    html += '</div></details>';
+    html += '</div></div>';
+    return html;
+}
+
+function batchAction(action, id) {
+    parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: action, id: id });
 }
 
 var coll = document.getElementsByClassName("infoBar");
@@ -1322,6 +1459,29 @@ function redrawScriptTree() {
       // Rebuild meta manager
       renderMetaManager();
   }
+  // ── Batch run list + progress handler ───────────
+  parent.pluginHandler.innovoscripttask.batchRunList = function(message) {
+      var runs = message.event.batchRuns || [];
+      var list = Q('batchRunList');
+      if (runs.length === 0) { list.innerHTML = '<span style="color:var(--fg3);font-size:12px;">No batch deployments yet.</span>'; return; }
+      list.innerHTML = '';
+      runs.forEach(function(run) { list.insertAdjacentHTML('beforeend', renderBatchCard(run)); });
+      resizeIframe();
+  }
+  parent.pluginHandler.innovoscripttask.batchProgress = function(message) {
+      var run = message.event.batchRun;
+      if (!run) return;
+      var list = Q('batchRunList');
+      var existing = document.getElementById('batch_' + run._id);
+      if (existing) {
+          existing.outerHTML = renderBatchCard(run);
+      } else {
+          if (list.querySelector('.batchCard') === null) list.innerHTML = '';
+          list.insertAdjacentHTML('afterbegin', renderBatchCard(run));
+      }
+      resizeIframe();
+  }
+
   function renderMetaManager() {
       var catList = Q('metaCatList'); catList.innerHTML = '';
       metaCategories.forEach(function(c) {

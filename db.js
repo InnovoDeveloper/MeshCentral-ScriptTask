@@ -98,7 +98,7 @@ module.exports.CreateDB = function(meshserver) {
         };
         obj.addJob = function(passedObj) {
           var nowTime = Math.floor(new Date() / 1000);
-          var defaultObj = { 
+          var defaultObj = {
               type: 'job',
               queueTime: nowTime,
               dontQueueUntil: nowTime,
@@ -106,13 +106,14 @@ module.exports.CreateDB = function(meshserver) {
               completeTime: null,
               node: null,
               scriptId: null,
-              scriptName: null, // in case the original reference is deleted in the future
+              scriptName: null,
               replaceVars: null,
               returnVal: null,
               errorVal: null,
               returnAct: null,
               runBy: null,
-              jobSchedule: null
+              jobSchedule: null,
+              batchRunId: null
           };
           var jObj = {...defaultObj, ...passedObj};
           
@@ -284,6 +285,29 @@ module.exports.CreateDB = function(meshserver) {
         obj.deleteMeta = function(id) {
             id = formatId(id);
             return obj.scriptFile.deleteOne({ _id: id });
+        };
+
+        // ── Batch Run management ──────────────────────────
+        obj.addBatchRun = function(batchRunObj) {
+            batchRunObj.type = 'batchRun';
+            return obj.scriptFile.insertOne(batchRunObj);
+        };
+        obj.getBatchRun = function(id) {
+            id = formatId(id);
+            return obj.scriptFile.find({ _id: id, type: 'batchRun' }).toArray();
+        };
+        obj.getActiveBatchRuns = function() {
+            return obj.scriptFile.find({ type: 'batchRun', status: 'active' }).toArray();
+        };
+        obj.getRecentBatchRuns = function(limit) {
+            return obj.scriptFile.find({ type: 'batchRun' }).sort({ createdAt: -1 }).limit(limit || 10).toArray();
+        };
+        obj.updateBatchRun = function(id, args) {
+            id = formatId(id);
+            return obj.scriptFile.updateOne({ _id: id }, { $set: args });
+        };
+        obj.deletePendingBatchJobs = function(batchRunId) {
+            return obj.scriptFile.deleteMany({ type: 'job', batchRunId: batchRunId, completeTime: null });
         };
 
         obj.checkDefaults = function() {
