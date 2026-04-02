@@ -4,7 +4,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Known Issues]
-- None. Please feel free to submit an issue via [GitHub](https://github.com/ryanblenis/MeshCentral-ScriptTask) if you find anything.
+- None. Please submit issues via [GitHub](https://github.com/InnovoDeveloper/MeshCentral-ScriptTask/issues).
+
+## [0.0.23] - 2026-04-02
+### Added
+- **Agent heartbeat system** — agent sends heartbeats every 30s while a script runs; server uses heartbeat freshness instead of fixed timeouts to detect stale nodes
+- **Unresponsive status** — new amber status for devices that stop sending heartbeats, distinct from red "error" (indicates script may have completed but contact was lost)
+- **Clickable status counts** in batch cards — click any count to filter the device list to that status
+- **Targeted retry buttons** — Retry Failed, Retry Unresponsive, Retry Skipped, Retry All (separate buttons per status)
+- **Queue offline policy** — new option to hold jobs for offline devices and dispatch automatically when they come online
+- **Delete batch runs** — remove completed/cancelled batches from the list
+- **Configurable node timeout** (Unresponsive after) — controls how long to wait after last heartbeat before marking a device unresponsive (10m, 20m, 30m default, 1h)
+### Fixed
+- **Batch timeout respects heartbeats** — batch-level timeout no longer force-completes if any device is still actively sending heartbeats
+- **Stale node check ordering** — fixed bug where dispatched nodes past timeout were never marked stale because the completion check returned early before reaching the stale detection code
+- **Zombie batch prevention** — batches that dispatched all nodes but never received completions are now properly timed out and cleaned up
+- **Selection respects filters** — Select All, mesh/type/version checkboxes, and Batch Deploy now only operate on visible (filtered) nodes
+
+## [0.0.22] - 2026-04-01
+### Added
+- **Batch Deployment** — deploy scripts to many devices at once with configurable batch size, interval, stagger, and offline policy
+- Live progress tracking via WebSocket with real-time progress bar and per-device status
+- Batch management: pause, resume, cancel with max 2 concurrent runs
+- Automatic batch recovery after server restart
+- Retry failed/skipped nodes as a new batch run preserving original settings
+
+## [0.0.21] - 2026-03-30
+### Added
+- Script descriptions, dynamic categories with custom colors, multi-tag support
+- Advanced device selection with status pills, tag parsing, version filters, tooltips
+- Modern UI with toolbar, dark mode, resizable columns, sortable node list
+### Fixed
+- Orphaned job crash (null-check for deleted scripts)
+- Modern theme dialog compatibility
 
 ## [0.0.20] - 2025-01-08
 ### Fixed

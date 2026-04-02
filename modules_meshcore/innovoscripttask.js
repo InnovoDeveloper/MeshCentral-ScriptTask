@@ -16,6 +16,7 @@ var pendingDownload = [];
 var debug_flag = false;
 var runningJobs = [];
 var runningJobPIDs = {};
+var runningJobHeartbeats = {};
 
 var dbg = function(str) {
     if (debug_flag !== true) return;
@@ -129,6 +130,11 @@ function consoleaction(args, rights, sessionid, parent) {
 
 function finalizeJob(job, retVal, errVal) {
     if (errVal != null && errVal.stack != null) errVal = errVal.stack;
+    // Stop heartbeat
+    if (runningJobHeartbeats[job.jobId]) {
+        clearInterval(runningJobHeartbeats[job.jobId]);
+        delete runningJobHeartbeats[job.jobId];
+    }
     runningJobs.remove(runningJobs.indexOf(job.jobId));
     if (typeof runningJobPIDs[job.jobId] != 'undefined') delete runningJobPIDs[job.jobId];
     mesh.SendCommand({ 
@@ -460,6 +466,16 @@ function runScript(sObj, jObj) {
         sObj.content = sObj.content.replace(new RegExp('#(.*?)#', 'g'), 'VAR_NOT_FOUND');
     }
     runningJobs.push(jObj.jobId);
+    // Start heartbeat — signals server that the script is still running
+    runningJobHeartbeats[jObj.jobId] = setInterval(function() {
+        try {
+            mesh.SendCommand({
+                action: 'plugin', plugin: 'innovoscripttask',
+                pluginaction: 'jobHeartbeat', jobId: jObj.jobId,
+                scriptId: jObj.scriptId, tag: 'console'
+            });
+        } catch (e) { }
+    }, 30000);
     dbg('Running Script '+ sObj._id);
     switch (sObj.filetype) {
         case 'ps1':

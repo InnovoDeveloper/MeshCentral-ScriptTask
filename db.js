@@ -309,6 +309,10 @@ module.exports.CreateDB = function(meshserver) {
         obj.deletePendingBatchJobs = function(batchRunId) {
             return obj.scriptFile.deleteMany({ type: 'job', batchRunId: batchRunId, completeTime: null });
         };
+        obj.deleteBatchRun = function(id) {
+            id = formatId(id);
+            return obj.scriptFile.deleteOne({ _id: id, type: 'batchRun' });
+        };
 
         obj.checkDefaults = function() {
             obj.scriptFile.find( { type: 'folder', name: 'Shared', path: 'Shared' } ).toArray()
