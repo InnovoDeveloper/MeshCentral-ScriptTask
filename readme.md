@@ -51,6 +51,19 @@ Enable the plugin and restart MeshCentral.
 - Full dark mode / night mode support via CSS variables
 - System font stack
 
+### Batch Deployment
+- **Batch deploy** to many devices at once with configurable batch size, interval, and stagger
+- **Offline device policies**: Skip, Defer to next batch, or Queue until online
+- **Agent heartbeat** — devices send heartbeats every 30s while scripts run, preventing false timeouts
+- **Unresponsive detection** — devices that stop sending heartbeats are marked "unresponsive" (amber) instead of "error" (red), indicating the script may have completed but contact was lost
+- **Configurable timeouts** — per-device unresponsive threshold and overall batch timeout; batch timeout auto-extends while any device is still reporting
+- **Live progress** — real-time progress bar, status counts, and per-device status via WebSocket
+- **Clickable status counts** — click any count (ok, failed, unresponsive, skipped) to filter the device list
+- **Targeted retries** — retry only failed, only unresponsive, only skipped, or all at once
+- **Batch management** — pause, resume, cancel, delete batch runs
+- **Max 2 concurrent** batch runs with automatic recovery after server restart
+- **Selection respects filters** — Select All, mesh/type/version checkboxes only affect visible (filtered) nodes
+
 ### Safety
 - Run confirmation dialog (shows script name and target device)
 - Delete confirmation with folder content warning

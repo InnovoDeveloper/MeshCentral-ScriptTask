@@ -50,16 +50,13 @@ module.exports.innovoscripttask = function (parent) {
             tabTitle: 'InnovoScriptTask',
             tabId: 'pluginInnovoScriptTask'
         });
-        QA('pluginInnovoScriptTask', '<iframe id="pluginIframeInnovoScriptTask" style="width: 100%; height: 700px; overflow: auto" scrolling="yes" frameBorder=0 src="/pluginadmin.ashx?pin=innovoscripttask&user=1" />');
+        // Make the plugin tab container fill viewport, then iframe fills it
+        var tabEl = document.getElementById('pluginInnovoScriptTask');
+        if (tabEl) { tabEl.style.cssText = 'position:relative;height:calc(100vh - 80px);overflow:hidden;'; }
+        QA('pluginInnovoScriptTask', '<iframe id="pluginIframeInnovoScriptTask" style="width:100%;height:100%;border:none;" scrolling="no" frameBorder=0 src="/pluginadmin.ashx?pin=innovoscripttask&user=1" />');
     };
-    // may not be needed, saving for later. Can be called to resize iFrame
     obj.resizeContent = function() {
-        var iFrame = document.getElementById('pluginIframeInnovoScriptTask');
-        var newHeight = 700;
-        //var sHeight = iFrame.contentWindow.document.body.scrollHeight;
-        //if (sHeight > newHeight) newHeight = sHeight;
-        //if (newHeight > 1600) newHeight = 1600;
-        iFrame.style.height = newHeight + 'px';
+        // iframe is 100% of its container which uses calc(100vh - 80px) — no JS sizing needed
     };
     
     obj.queueRun = async function() {
@@ -166,6 +163,59 @@ module.exports.innovoscripttask = function (parent) {
         obj.db.getActiveBatchRuns()
         .then(function(runs) {
             runs.forEach(function(run) {
+                // Batch-level timeout: force-complete if running longer than batchTimeoutSec (default 2 hours)
+                // BUT skip timeout if any node is still actively sending heartbeats
+                var batchTimeout = run.batchTimeoutSec || 7200;
+                if (run.createdAt && (now - run.createdAt) > batchTimeout) {
+                    var hasActiveHeartbeat = run.nodes.some(function(n) {
+                        return n.status === 'dispatched' && n.lastHeartbeat && (now - n.lastHeartbeat) < 120;
+                    });
+                    if (!hasActiveHeartbeat) {
+                        // No devices actively reporting — safe to timeout
+                        run.nodes.forEach(function(n) {
+                            if (n.status === 'pending' || n.status === 'dispatched' || n.status === 'queued') {
+                                n.status = 'unresponsive';
+                                n.errorVal = 'Batch timeout (' + Math.round(batchTimeout / 60) + 'm)';
+                            }
+                        });
+                        obj.recalcBatchCounts(run);
+                        run.status = 'completed';
+                        run.completedAt = now;
+                        obj.db.updateBatchRun(run._id, { status: 'completed', completedAt: now, nodes: run.nodes, counts: run.counts });
+                        obj.sendBatchProgress(run);
+                        console.log('PLUGIN: InnovoScriptTask: Batch run timed out after ' + Math.round((now - run.createdAt) / 60) + 'm — ' + run.counts.completed + ' ok, ' + (run.counts.errored + run.counts.unresponsive) + ' unresponsive, ' + run.counts.skipped + ' skipped');
+                        return;
+                    }
+                    // else: at least one device still has fresh heartbeats — extend the batch
+                }
+
+                // Check dispatched nodes — heartbeat-aware timeout
+                var nodeTimeout = run.nodeTimeoutSec || 1800;
+                var staleFound = false;
+                run.nodes.forEach(function(n) {
+                    if (n.status !== 'dispatched') return;
+                    if (n.lastHeartbeat) {
+                        // Agent was sending heartbeats — timeout from last heartbeat
+                        if ((now - n.lastHeartbeat) > nodeTimeout) {
+                            n.status = 'unresponsive';
+                            n.errorVal = 'Lost contact (last heartbeat ' + Math.floor((now - n.lastHeartbeat) / 60) + 'm ago)';
+                            staleFound = true;
+                        }
+                    } else {
+                        // No heartbeat received — timeout from dispatch time
+                        if (n.dispatchTime && (now - n.dispatchTime) > nodeTimeout) {
+                            n.status = 'unresponsive';
+                            n.errorVal = 'No response after ' + Math.round(nodeTimeout / 60) + 'm (no heartbeat)';
+                            staleFound = true;
+                        }
+                    }
+                });
+                if (staleFound) {
+                    obj.recalcBatchCounts(run);
+                    obj.db.updateBatchRun(run._id, { nodes: run.nodes, counts: run.counts });
+                    obj.sendBatchProgress(run);
+                }
+
                 // Check if it's time for the next batch
                 if (run.nextBatchAt && run.nextBatchAt <= now) {
                     if (run.currentBatchIndex >= run.totalBatches) {
@@ -178,20 +228,12 @@ module.exports.innovoscripttask = function (parent) {
                     }
                     obj.dispatchBatch(run);
                 }
-                // Check for stale dispatched nodes (dispatched > 10 min ago, no completion)
-                var staleThreshold = now - 600;
-                var staleFound = false;
-                run.nodes.forEach(function(n) {
-                    if (n.status === 'dispatched' && n.dispatchTime && n.dispatchTime < staleThreshold) {
-                        n.status = 'error';
-                        n.errorVal = 'Timeout: no response from agent';
-                        staleFound = true;
-                    }
-                });
-                if (staleFound) {
-                    obj.recalcBatchCounts(run);
-                    obj.db.updateBatchRun(run._id, { nodes: run.nodes, counts: run.counts });
-                    obj.sendBatchProgress(run);
+
+                // Try dispatching queued nodes (offline policy = 'queue') that are now online
+                var onlineAgents = Object.keys(obj.meshServer.webserver.wsagents);
+                var queuedNodes = run.nodes.filter(function(n) { return n.status === 'queued'; });
+                if (queuedNodes.length > 0) {
+                    obj.dispatchQueuedNodes(run, queuedNodes, onlineAgents);
                 }
             });
         })
@@ -221,8 +263,11 @@ module.exports.innovoscripttask = function (parent) {
             nodesInBatch.forEach(function(nodeEntry) {
                 // Check if device is online
                 if (onlineAgents.indexOf(nodeEntry.nodeId) === -1) {
-                    // Offline handling
-                    if (run.offlinePolicy === 'defer' && batchIndex < run.totalBatches - 1) {
+                    // Offline handling based on policy
+                    if (run.offlinePolicy === 'queue') {
+                        nodeEntry.status = 'queued';
+                        nodeEntry.errorVal = 'Waiting for device to come online';
+                    } else if (run.offlinePolicy === 'defer' && batchIndex < run.totalBatches - 1) {
                         nodeEntry.batchIndex = batchIndex + 1; // Move to next batch
                         nodeEntry.deferCount = (nodeEntry.deferCount || 0) + 1;
                         if (nodeEntry.deferCount >= 3) {
@@ -306,6 +351,63 @@ module.exports.innovoscripttask = function (parent) {
         .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: Batch dispatch error:', e); });
     };
 
+    // Dispatch queued nodes (offline policy 'queue') that have come online
+    obj.dispatchQueuedNodes = function(run, queuedNodes, onlineAgents) {
+        var nowOnline = queuedNodes.filter(function(n) { return onlineAgents.indexOf(n.nodeId) !== -1; });
+        if (nowOnline.length === 0) return;
+
+        obj.db.get(run.scriptId)
+        .then(function(scripts) {
+            var script = scripts[0];
+            if (!script || !script.content) return;
+
+            var delay = 0;
+            var staggerMs = (run.staggerSec || 2) * 1000;
+            nowOnline.forEach(function(nodeEntry) {
+                (function(ne, delayMs) {
+                    setTimeout(function() {
+                        var dispatchTime = Math.floor(Date.now() / 1000);
+                        obj.db.addJob({
+                            scriptId: run.scriptId,
+                            scriptName: run.scriptName,
+                            node: ne.nodeId,
+                            runBy: run.createdBy,
+                            batchRunId: run._id,
+                            dispatchTime: dispatchTime
+                        })
+                        .then(function(result) {
+                            var jobId = result.insertedId || (result.ops && result.ops[0] && result.ops[0]._id);
+                            ne.jobId = jobId;
+                            ne.status = 'dispatched';
+                            ne.dispatchTime = dispatchTime;
+                            try {
+                                obj.meshServer.webserver.wsagents[ne.nodeId].send(JSON.stringify({
+                                    action: 'plugin', plugin: 'innovoscripttask',
+                                    pluginaction: 'triggerJob', jobId: jobId,
+                                    scriptId: run.scriptId, replaceVars: {},
+                                    scriptHash: script.contentHash, dispatchTime: dispatchTime
+                                }));
+                            } catch (e) {
+                                ne.status = 'error';
+                                ne.errorVal = 'Dispatch failed: ' + e.message;
+                            }
+                            obj.recalcBatchCounts(run);
+                            obj.db.updateBatchRun(run._id, { nodes: run.nodes, counts: run.counts });
+                            obj.sendBatchProgress(run);
+                        })
+                        .catch(function(e) {
+                            ne.status = 'error';
+                            ne.errorVal = 'Job creation failed: ' + e.message;
+                        });
+                    }, delayMs);
+                })(nodeEntry, delay);
+                delay += staggerMs;
+            });
+            console.log('PLUGIN: InnovoScriptTask: Dispatched ' + nowOnline.length + ' queued node(s) that came online');
+        })
+        .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: Queue dispatch error:', e); });
+    };
+
     obj.onBatchJobComplete = function(jobId, batchRunId, retVal, errVal) {
         obj.db.getBatchRun(batchRunId)
         .then(function(runs) {
@@ -350,7 +452,7 @@ module.exports.innovoscripttask = function (parent) {
     };
 
     obj.recalcBatchCounts = function(run) {
-        var c = { total: run.nodes.length, pending: 0, queued: 0, dispatched: 0, completed: 0, errored: 0, skipped: 0 };
+        var c = { total: run.nodes.length, pending: 0, queued: 0, dispatched: 0, completed: 0, errored: 0, skipped: 0, unresponsive: 0 };
         run.nodes.forEach(function(n) {
             if (n.status === 'pending') c.pending++;
             else if (n.status === 'queued') c.queued++;
@@ -358,6 +460,7 @@ module.exports.innovoscripttask = function (parent) {
             else if (n.status === 'completed') c.completed++;
             else if (n.status === 'error') c.errored++;
             else if (n.status === 'skipped') c.skipped++;
+            else if (n.status === 'unresponsive') c.unresponsive++;
         });
         run.counts = c;
     };
@@ -376,6 +479,8 @@ module.exports.innovoscripttask = function (parent) {
         var batchIntervalSec = Math.max(30, parseInt(command.batchIntervalSec) || 300);
         var staggerSec = Math.max(1, parseInt(command.staggerSec) || 2);
         var offlinePolicy = command.offlinePolicy || 'skip';
+        var batchTimeoutSec = Math.max(300, parseInt(command.batchTimeoutSec) || 7200); // default 2h, min 5m
+        var nodeTimeoutSec = Math.max(120, parseInt(command.nodeTimeoutSec) || 600); // default 10m, min 2m
         var now = Math.floor(Date.now() / 1000);
 
         // Check max concurrent batch runs
@@ -423,6 +528,8 @@ module.exports.innovoscripttask = function (parent) {
                 batchIntervalSec: batchIntervalSec,
                 staggerSec: staggerSec,
                 offlinePolicy: offlinePolicy,
+                batchTimeoutSec: batchTimeoutSec,
+                nodeTimeoutSec: nodeTimeoutSec,
                 status: 'active',
                 currentBatchIndex: 0,
                 totalBatches: totalBatches,
@@ -983,6 +1090,29 @@ module.exports.innovoscripttask = function (parent) {
                     }));
                 });
             break;
+            case 'jobHeartbeat':
+                if (command.jobId) {
+                    obj.db.getActiveBatchRuns()
+                    .then(function(runs) {
+                        var now = Math.floor(Date.now() / 1000);
+                        var jobIdStr = (command.jobId || '').toString();
+                        runs.forEach(function(run) {
+                            var updated = false;
+                            for (var i = 0; i < run.nodes.length; i++) {
+                                if (run.nodes[i].jobId && run.nodes[i].jobId.toString() === jobIdStr && run.nodes[i].status === 'dispatched') {
+                                    run.nodes[i].lastHeartbeat = now;
+                                    updated = true;
+                                    break;
+                                }
+                            }
+                            if (updated) {
+                                obj.db.updateBatchRun(run._id, { nodes: run.nodes });
+                            }
+                        });
+                    })
+                    .catch(function(e) { });
+                }
+            break;
             case 'jobComplete':
                 //obj.debug('ScriptTask', 'jobComplete Triggered', JSON.stringify(command));
                 var jobNodeHistory = null, scriptHistory = null;
@@ -1110,23 +1240,43 @@ module.exports.innovoscripttask = function (parent) {
                     obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'batchRunList', batchRuns: runs });
                 });
             break;
-            case 'retryFailedBatch':
+            case 'deleteBatchRun':
                 obj.db.getBatchRun(command.id)
                 .then(function(runs) {
                     if (runs.length === 0) return;
                     var run = runs[0];
-                    var failedNodes = run.nodes.filter(function(n) { return n.status === 'error' || n.status === 'skipped'; });
-                    if (failedNodes.length === 0) return;
-                    // Create new batch run with only failed nodes
+                    // Only allow deleting completed/cancelled/error batches, or force-delete active ones
+                    if (run.status === 'active' || run.status === 'paused') {
+                        // Cancel first, then delete
+                        obj.db.deletePendingBatchJobs(run._id);
+                    }
+                    obj.db.deleteBatchRun(run._id);
+                    // Notify UI to remove the card
+                    var targets = ['*', 'server-users'];
+                    obj.meshServer.DispatchEvent(targets, obj, { nolog: true, action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'batchDeleted', batchId: run._id.toString() });
+                });
+            break;
+            case 'retryFailedBatch':
+            case 'retryBatchByStatus':
+                obj.db.getBatchRun(command.id)
+                .then(function(runs) {
+                    if (runs.length === 0) return;
+                    var run = runs[0];
+                    // Filter by requested statuses (default: error + unresponsive + skipped)
+                    var statuses = command.statuses || ['error', 'unresponsive', 'skipped'];
+                    var retryNodes = run.nodes.filter(function(n) { return statuses.indexOf(n.status) !== -1; });
+                    if (retryNodes.length === 0) return;
                     var retryCmd = {
                         scriptId: run.scriptId,
                         scriptName: run.scriptName,
-                        nodes: failedNodes.map(function(n) { return n.nodeId; }),
-                        nodeNames: failedNodes.map(function(n) { return n.nodeName; }),
+                        nodes: retryNodes.map(function(n) { return n.nodeId; }),
+                        nodeNames: retryNodes.map(function(n) { return n.nodeName; }),
                         batchSize: run.batchSize,
                         batchIntervalSec: run.batchIntervalSec,
                         staggerSec: run.staggerSec,
-                        offlinePolicy: run.offlinePolicy
+                        offlinePolicy: run.offlinePolicy,
+                        nodeTimeoutSec: run.nodeTimeoutSec,
+                        batchTimeoutSec: run.batchTimeoutSec
                     };
                     obj.startBatchRun(retryCmd, myparent.user.name);
                 });
