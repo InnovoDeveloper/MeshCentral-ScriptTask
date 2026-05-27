@@ -905,24 +905,24 @@ function updateNodesTable() {
   Q('pillTagged').textContent = statusCounts.tagged;
   Q('pillUntagged').textContent = statusCounts.untagged;
 
-  // Meshes
+  // Meshes  (facet: within-column OR, across-column AND)
   for (const i in parent.meshes) {
       var item = parent.meshes[i];
       if (item.mtype == 2) {
           var lbl = document.createElement('label');
-          lbl.innerHTML = '<input type="checkbox" onclick="selNodesByMesh(this);" value="' + item._id + '"> ' + escHtml(item.name);
+          lbl.innerHTML = '<input type="checkbox" class="arFacet" data-facet="mesh" onclick="applyFacetFilters();" value="' + item._id + '"> ' + escHtml(item.name);
           meshList.appendChild(lbl);
       }
   }
 
-  // Device types
+  // Device types  (facet)
   var sortedTypes = Object.keys(deviceTypes).sort();
   var filterSelect = Q('arDeviceFilter');
   filterSelect.innerHTML = '<option value="">All Types</option>';
   sortedTypes.forEach(function(dt) {
       filterSelect.appendChild(new Option(dt + ' (' + deviceTypes[dt] + ')', dt));
       var lbl = document.createElement('label');
-      lbl.innerHTML = '<input type="checkbox" onclick="selNodesByType(this);" value="' + dt + '"> ' + escHtml(dt) + ' <span class="arNodeInfo">(' + deviceTypes[dt] + ')</span>';
+      lbl.innerHTML = '<input type="checkbox" class="arFacet" data-facet="type" onclick="applyFacetFilters();" value="' + dt + '"> ' + escHtml(dt) + ' <span class="arNodeInfo">(' + deviceTypes[dt] + ')</span>';
       typeList.appendChild(lbl);
   });
 
@@ -951,7 +951,9 @@ function updateNodesTable() {
       versionList.appendChild(hdr);
       Object.keys(versions).sort().forEach(function(v) {
           var lbl = document.createElement('label');
-          lbl.innerHTML = '<input type="checkbox" onclick="selNodesByVersion(this,\'data-kv-' + k + '\');" value="' + escHtml(v) + '"> ' + k + ' ' + escHtml(v) + ' <span class="arNodeInfo">(' + versions[v] + ')</span>';
+          // Each kv key (dp, ha, py, p, s, etc.) is its own facet "column".
+          // Within a kv key, multiple checkboxes OR; across kv keys, AND.
+          lbl.innerHTML = '<input type="checkbox" class="arFacet" data-facet="kv-' + k + '" onclick="applyFacetFilters();" value="' + escHtml(v) + '"> ' + k + ' ' + escHtml(v) + ' <span class="arNodeInfo">(' + versions[v] + ')</span>';
           versionList.appendChild(lbl);
       });
   });
@@ -968,52 +970,101 @@ function setStatusFilter(el) {
     filterAdvancedRun();
 }
 
-function filterAdvancedRun() {
+// ── Facet filter (within-column OR, across-column AND) ────────────────────
+// Reads every column's checked facets + the text query + status pill +
+// the device-type dropdown + the kv version dropdowns, computes per-node
+// visibility, and updates the node list. The COLUMN CHECKBOXES are the
+// primary facet inputs — clicking them does NOT directly check per-node
+// boxes (that's what "Select Visible" is for). They drive what's shown.
+function applyFacetFilters() {
     var query = (Q('arNodeSearch').value || '').toLowerCase();
     var typeFilter = Q('arDeviceFilter').value;
-    // Collect all dynamic kv filters
-    var kvFilters = {};
+    // Sticky filters from the top-bar selects (mostly redundant with the
+    // sidebar checkbox facets, but kept so existing keyboard / quick-pick
+    // UX still works).
+    var kvSelectFilters = {};
     arKvKeys.forEach(function(k) {
         var sel = document.getElementById('arKvFilter_' + k);
-        if (sel && sel.value) kvFilters[k] = sel.value;
+        if (sel && sel.value) kvSelectFilters[k] = sel.value;
     });
+    // Sidebar checkbox facets: gather every checked facet into a map.
+    //   facetSets = { mesh: Set[ids], type: Set[types], 'kv-dp': Set[versions], ... }
+    var facetSets = {};
+    document.querySelectorAll('.arFacet:checked').forEach(function(cb) {
+        var f = cb.getAttribute('data-facet') || '';
+        if (!facetSets[f]) facetSets[f] = new Set();
+        facetSets[f].add(cb.value);
+    });
+
     var nodes = document.querySelectorAll('#arNodeList .arNodeItem');
+    var visibleCount = 0;
     nodes.forEach(function(lbl) {
         var name = lbl.getAttribute('data-name') || '';
         var type = lbl.getAttribute('data-type') || '';
         var ip = lbl.getAttribute('data-ip') || '';
+        var meshId = lbl.getAttribute('data-mesh') || '';
         var isOnline = lbl.getAttribute('data-online') === '1';
         var isTagged = lbl.getAttribute('data-tagged') === '1';
-        // Status pill filter
+
+        // 1. Status pill filter
         var matchStatus = true;
         if (arStatusFilter === 'online') matchStatus = isOnline;
         else if (arStatusFilter === 'offline') matchStatus = !isOnline;
         else if (arStatusFilter === 'tagged') matchStatus = isTagged;
         else if (arStatusFilter === 'untagged') matchStatus = !isTagged;
+
+        // 2. Text search
         var matchQ = !query || name.indexOf(query) !== -1 || ip.indexOf(query) !== -1 || type.toLowerCase().indexOf(query) !== -1;
-        var matchType = !typeFilter || type === typeFilter;
-        var matchKv = true;
-        for (var k in kvFilters) {
-            if ((lbl.getAttribute('data-kv-' + k) || '') !== kvFilters[k]) { matchKv = false; break; }
+
+        // 3. Top-bar device type dropdown
+        var matchTypeDropdown = !typeFilter || type === typeFilter;
+
+        // 4. Top-bar kv version dropdowns
+        var matchKvDropdown = true;
+        for (var k in kvSelectFilters) {
+            if ((lbl.getAttribute('data-kv-' + k) || '') !== kvSelectFilters[k]) { matchKvDropdown = false; break; }
         }
-        var show = matchStatus && matchQ && matchType && matchKv;
+
+        // 5. Sidebar facet columns. WITHIN each column = OR (any checked
+        //    value matches). ACROSS columns = AND (every active facet must
+        //    match). Empty column = no filter from that column.
+        var matchFacets = true;
+        for (var fkey in facetSets) {
+            var set = facetSets[fkey];
+            if (set.size === 0) continue;
+            var nodeVal;
+            if (fkey === 'mesh') nodeVal = meshId;
+            else if (fkey === 'type') nodeVal = type;
+            else if (fkey.indexOf('kv-') === 0) nodeVal = lbl.getAttribute('data-' + fkey) || '';
+            else nodeVal = '';
+            if (!set.has(nodeVal)) { matchFacets = false; break; }
+        }
+
+        var show = matchStatus && matchQ && matchTypeDropdown && matchKvDropdown && matchFacets;
         lbl.style.display = show ? '' : 'none';
+        if (show) visibleCount++;
     });
+
+    // Surface the visible count alongside the selected count.
+    var vc = Q('arVisibleCount');
+    if (!vc) {
+        // First call — inject the visible count span next to selected count.
+        var selCount = Q('arSelectedCount');
+        if (selCount && selCount.parentNode) {
+            var span = document.createElement('span');
+            span.id = 'arVisibleCount';
+            span.style.cssText = 'margin-left:12px;color:var(--fg3);';
+            selCount.parentNode.insertBefore(span, selCount.nextSibling);
+            vc = span;
+        }
+    }
+    if (vc) vc.textContent = visibleCount + ' visible';
+
     updateSelectedCount();
 }
 
-function selNodesByVersion(el, dataAttr) {
-    var ver = el.value;
-    var checked = el.checked;
-    var nodes = document.querySelectorAll('#arNodeList .arNodeItem');
-    nodes.forEach(function(lbl) {
-        if (lbl.getAttribute(dataAttr) === ver && lbl.style.display !== 'none') {
-            lbl.querySelector('input[type="checkbox"]').checked = checked;
-        }
-    });
-    syncHiddenCheckboxes();
-    updateSelectedCount();
-}
+// Backwards compatibility — older code calls filterAdvancedRun().
+function filterAdvancedRun() { applyFacetFilters(); }
 
 function selVisibleNodes(checked) {
     var nodes = document.querySelectorAll('#arNodeList .arNodeItem');
@@ -1299,6 +1350,148 @@ function goBatchDeploy() {
     }, html);
 }
 
+// ── Reuse a prior batch's device list for a different script ───────────────
+// Opens a 2-step flow:
+//   step 1: script picker (filtered to existing scripts in the tree)
+//   step 2: batch deploy modal pre-filled with the originating run's
+//           batch size, interval, stagger, offline policy, timeouts
+// At submit time, sends startBatchRun with the same nodes[] as the
+// originating batch but the operator's chosen script + settings.
+function reuseDevicesFromBatch(batchId) {
+    var run = batchRunCache[batchId];
+    if (!run) { parent.setDialogMode(2, "Oops!", 1, null, 'Batch run data not available — try reloading the page.'); return; }
+    var nodes = (run.nodes || []).map(function(n) { return n.nodeId; }).filter(Boolean);
+    var nodeNames = (run.nodes || []).map(function(n) { return n.nodeName || n.nodeId; });
+    if (!nodes.length) { parent.setDialogMode(2, "Oops!", 1, null, 'No devices in this batch.'); return; }
+
+    // Step 1: build a script picker. Use the existing tree (scriptTree
+    // global) for the list — same data as the left sidebar. Show as a
+    // searchable flat list of script names; folders are excluded.
+    var allScripts = [];
+    function walk(items) {
+        items.forEach(function(it) {
+            if (it.type === 'folder') { if (it.items) walk(it.items); }
+            else if (it.type) { allScripts.push({ _id: it._id, name: it.name, type: it.type, category: it.category, description: it.description, path: it.path }); }
+        });
+    }
+    if (typeof scriptTree !== 'undefined' && scriptTree) {
+        if (Array.isArray(scriptTree)) walk(scriptTree);
+        else if (scriptTree.items) walk(scriptTree.items);
+    }
+    allScripts.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+
+    var pickerHtml = '<div style="font-size:13px;">';
+    pickerHtml += 'Run a different script on <b>' + nodes.length + '</b> devices from <b>' + escHtml(run.scriptName || '(unnamed batch)') + '</b>.<br/><br/>';
+    pickerHtml += '<input type="text" id="reuseScriptSearch" placeholder="Filter scripts..." style="width:100%;padding:6px 8px;font-size:12px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--fg);margin-bottom:8px;" oninput="reuseFilterScripts(this.value);" />';
+    pickerHtml += '<div id="reuseScriptList" style="max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);">';
+    allScripts.forEach(function(s) {
+        var catBadge = s.category ? '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--bg3);color:var(--fg2);margin-left:6px;">' + escHtml(s.category) + '</span>' : '';
+        var desc = s.description ? '<div style="font-size:11px;color:var(--fg3);margin-top:2px;">' + escHtml(s.description) + '</div>' : '';
+        pickerHtml += '<div class="reuseScriptRow" data-search="' + escHtml((s.name + ' ' + (s.description || '') + ' ' + (s.category || '')).toLowerCase()) + '" data-script-id="' + s._id + '" data-script-name="' + escHtml(s.name) + '" data-script-type="' + s.type + '" style="padding:6px 10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="reusePickScript(this);">';
+        pickerHtml += '<span style="font-weight:500;">' + escHtml(s.name) + '</span><span style="font-size:10px;color:var(--fg3);margin-left:6px;">' + s.type + '</span>' + catBadge;
+        pickerHtml += desc;
+        pickerHtml += '</div>';
+    });
+    pickerHtml += '</div></div>';
+
+    // Stash the originating batch id + node list on window so the second
+    // dialog can read them (parent.setDialogMode unmounts the iframe DOM).
+    window._reuseFlow = { batchId: batchId, nodes: nodes, nodeNames: nodeNames, run: run };
+
+    parent.setDialogMode(2, "Pick a Script", 0, null, pickerHtml);
+}
+
+// Filter the script picker list as the user types.
+function reuseFilterScripts(q) {
+    q = (q || '').toLowerCase();
+    var rows = parent.document.querySelectorAll('.reuseScriptRow');
+    rows.forEach(function(r) {
+        var s = r.getAttribute('data-search') || '';
+        r.style.display = (!q || s.indexOf(q) !== -1) ? '' : 'none';
+    });
+}
+
+// Called when the operator clicks a script in the picker. Opens the
+// batch-deploy modal pre-filled with the originating batch's settings.
+function reusePickScript(el) {
+    var scriptId = el.getAttribute('data-script-id');
+    var scriptName = el.getAttribute('data-script-name');
+    var flow = window._reuseFlow;
+    if (!flow) { parent.setDialogMode(2, "Oops!", 1, null, 'Lost track of the device list — please retry.'); return; }
+    parent.setDialogMode(); // dismiss picker
+
+    var nodes = flow.nodes;
+    var nodeNames = flow.nodeNames;
+    var run = flow.run;
+    var totalBatches = function(size) { return Math.ceil(nodes.length / Math.max(1, size)); };
+
+    // Pre-fill settings from originating batch (with safe fallbacks).
+    var srcBatchSize = run.batchSize || 25;
+    var srcInterval  = run.batchIntervalSec || 300;
+    var srcStagger   = run.staggerSec || 2;
+    var srcOffline   = run.offlinePolicy || 'skip';
+    var srcNodeTo    = run.nodeTimeoutSec || 1800;
+    var srcBatchTo   = run.batchTimeoutSec || 7200;
+
+    function optList(opts, selected) {
+        return opts.map(function(o) {
+            var sel = (parseInt(o.value) === parseInt(selected) || o.value === selected) ? ' selected' : '';
+            return '<option value="' + o.value + '"' + sel + '>' + o.label + '</option>';
+        }).join('');
+    }
+
+    var intervals = [
+        { value: 60, label: '1 minute' }, { value: 120, label: '2 minutes' },
+        { value: 300, label: '5 minutes' }, { value: 600, label: '10 minutes' }, { value: 1800, label: '30 minutes' }
+    ];
+    var staggers = [
+        { value: 1, label: '1 second' }, { value: 2, label: '2 seconds' }, { value: 3, label: '3 seconds' },
+        { value: 5, label: '5 seconds' }, { value: 10, label: '10 seconds' }
+    ];
+    var offlines = [
+        { value: 'skip', label: 'Skip' }, { value: 'defer', label: 'Defer to next batch' }, { value: 'queue', label: 'Queue until online' }
+    ];
+    var nodeTos = [
+        { value: 600, label: '10 minutes' }, { value: 1200, label: '20 minutes' },
+        { value: 1800, label: '30 minutes' }, { value: 3600, label: '1 hour' }
+    ];
+    var batchTos = [
+        { value: 1800, label: '30 minutes' }, { value: 3600, label: '1 hour' }, { value: 7200, label: '2 hours' },
+        { value: 14400, label: '4 hours' }, { value: 28800, label: '8 hours' }
+    ];
+
+    var html = '<div style="font-size:13px;">';
+    html += '<b>' + escHtml(scriptName) + '</b> on <b>' + nodes.length + '</b> devices reused from <b>' + escHtml(run.scriptName || '?') + '</b><br/>';
+    html += '<span style="color:var(--fg3);font-size:11px;">Settings pre-filled from the originating batch — edit if needed.</span><br/><br/>';
+    html += '<table style="width:100%">';
+    html += '<tr><td style="width:160px">Batch size:</td><td><input type="number" id="batchSize" value="' + srcBatchSize + '" min="1" max="' + nodes.length + '" style="width:80px" oninput="Q(\'batchSummary\').textContent=Math.ceil(' + nodes.length + '/Math.max(1,this.value))+\' batches\'" /> <span id="batchSummary">' + totalBatches(srcBatchSize) + ' batches</span></td></tr>';
+    html += '<tr><td>Interval between batches:</td><td><select id="batchInterval">' + optList(intervals, srcInterval) + '</select></td></tr>';
+    html += '<tr><td>Stagger per device:</td><td><select id="batchStagger">' + optList(staggers, srcStagger) + '</select></td></tr>';
+    html += '<tr><td>Offline devices:</td><td><select id="batchOffline">' + optList(offlines, srcOffline) + '</select></td></tr>';
+    html += '<tr><td>Unresponsive after:</td><td><select id="nodeTimeout">' + optList(nodeTos, srcNodeTo) + '</select> <span style="color:var(--fg3);font-size:11px;">of silence per device</span></td></tr>';
+    html += '<tr><td>Batch timeout:</td><td><select id="batchTimeout">' + optList(batchTos, srcBatchTo) + '</select> <span style="color:var(--fg3);font-size:11px;">entire run</span></td></tr>';
+    html += '</table></div>';
+
+    parent.setDialogMode(2, "Reuse Devices — Batch Deploy", 3, function() {
+        var batchSize = parseInt(parent.document.getElementById('batchSize').value) || srcBatchSize;
+        var batchInterval = parseInt(parent.document.getElementById('batchInterval').value) || srcInterval;
+        var batchStagger = parseInt(parent.document.getElementById('batchStagger').value) || srcStagger;
+        var offlinePolicy = parent.document.getElementById('batchOffline').value || srcOffline;
+        var nodeTimeout = parseInt(parent.document.getElementById('nodeTimeout').value) || srcNodeTo;
+        var batchTimeout = parseInt(parent.document.getElementById('batchTimeout').value) || srcBatchTo;
+        parent.meshserver.send({
+            action: 'plugin', plugin: 'innovoscripttask', pluginaction: 'startBatchRun',
+            scriptId: scriptId, scriptName: scriptName,
+            nodes: nodes, nodeNames: nodeNames,
+            batchSize: batchSize, batchIntervalSec: batchInterval,
+            staggerSec: batchStagger, offlinePolicy: offlinePolicy,
+            nodeTimeoutSec: nodeTimeout, batchTimeoutSec: batchTimeout
+        });
+        window._reuseFlow = null;
+        openSection('batchRuns');
+    }, html);
+}
+
 function renderBatchCard(run) {
     var c = run.counts || {};
     var total = c.total || 1;
@@ -1388,6 +1581,7 @@ function renderBatchCard(run) {
     }
     html += '<button onclick="exportBatchCsv(\'' + batchId + '\')" title="Download per-device results as CSV">Export CSV</button>';
     html += '<button onclick="copyBatchAll(\'' + batchId + '\', this)" title="Copy ALL devices\' output to clipboard"><svg viewBox="0 0 16 16" width="13" height="13" style="vertical-align:middle;display:inline-block;fill:currentColor;margin-right:4px;"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg><span>Copy All</span></button>';
+    html += '<button onclick="reuseDevicesFromBatch(\'' + batchId + '\')" title="Open the script picker scoped to this batch\'s devices" style="background:var(--accent);color:#fff;border-color:var(--accent);">Run Another Script on These Devices</button>';
     html += '</div>';
 
     // Error-pattern summary — groups error/unresponsive nodes by a hash of their

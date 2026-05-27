@@ -195,8 +195,13 @@ function runPowerShell(sObj, jObj) {
                 outstr = (procRetVal) ? 'Failure' : 'Success';
             }
             dbg('Output is: ' + outstr);
-            finalizeJob(jObj, outstr);
-            try { 
+            // Treat exit > 1 as script-reported failure (same rationale as bash handler).
+            if (procRetVal && procRetVal !== 0 && procRetVal !== 1) {
+                finalizeJob(jObj, outstr, 'Script exited with code ' + procRetVal);
+            } else {
+                finalizeJob(jObj, outstr);
+            }
+            try {
                 fs.unlinkSync(oName);
                 fs.unlinkSync(pName);
             } catch (e) { }
@@ -284,14 +289,18 @@ function runPowerShellNonWin(sObj, jObj) {
                 outstr = (procRetVal) ? 'Failure' : 'Success';
             }
             dbg('Output is: ' + outstr);
-            finalizeJob(jObj, outstr);
+            if (procRetVal && procRetVal !== 0 && procRetVal !== 1) {
+                finalizeJob(jObj, outstr, 'Script exited with code ' + procRetVal);
+            } else {
+                finalizeJob(jObj, outstr);
+            }
             try {
                 fs.unlinkSync(path + oName);
                 fs.unlinkSync(path + pName);
             } catch (e) { dbg('Could not unlink files2, error was: ' + e + ' for path ' + path); }
         });
         child.stdin.write('exit\n');
-    } catch (e) { 
+    } catch (e) {
         dbg('Error block was (PowerShellNonWin): ' + e);
         finalizeJob(jObj, null, e);
     }
@@ -347,9 +356,13 @@ function runBat(sObj, jObj) {
                 fs.unlinkSync(oName);
                 fs.unlinkSync(pName);
             } catch (e) { dbg('Could not unlink files, error was: ' + e); }
-            finalizeJob(jObj, outstr);
+            if (procRetVal && procRetVal !== 0 && procRetVal !== 1) {
+                finalizeJob(jObj, outstr, 'Script exited with code ' + procRetVal);
+            } else {
+                finalizeJob(jObj, outstr);
+            }
         });
-    } catch (e) { 
+    } catch (e) {
         dbg('Error block was (BAT): ' + e);
         finalizeJob(jObj, null, e);
     }
@@ -409,11 +422,11 @@ function runBash(sObj, jObj) {
                 finalizeJob(jObj, null, 'Process terminated unexpectedly.');
                 return;
             }
-            try { 
+            try {
                 outstr = fs.readFileSync(path + oName, 'utf8').toString();
             } catch (e) { outstr = (procRetVal) ? 'Failure' : 'Success'; }
             if (outstr) {
-                //outstr = outstr.replace(/[^\x20-\x7E]/g, ''); 
+                //outstr = outstr.replace(/[^\x20-\x7E]/g, '');
                 try { outstr = outstr.trim(); } catch (e) { }
             } else {
                 outstr = (procRetVal) ? 'Failure' : 'Success';
@@ -423,7 +436,16 @@ function runBash(sObj, jObj) {
                 fs.unlinkSync(path + oName);
                 fs.unlinkSync(path + pName);
             } catch (e) { dbg('Could not unlink files2, error was: ' + e + ' for path ' + path); }
-            finalizeJob(jObj, outstr);
+            // If the script exited with a non-zero, non-1 code (Patch 7's
+            // exit 7 on verification fail being the motivating case), surface
+            // it as errVal so the UI shows the run as 'error' rather than
+            // 'success-with-funny-output'. Exit 0 is success; exit 1 is
+            // already handled above as 'terminated unexpectedly'.
+            if (procRetVal && procRetVal !== 0 && procRetVal !== 1) {
+                finalizeJob(jObj, outstr, 'Script exited with code ' + procRetVal);
+            } else {
+                finalizeJob(jObj, outstr);
+            }
         });
     } catch (e) { 
         dbg('Error block was (bash): ' + e);
