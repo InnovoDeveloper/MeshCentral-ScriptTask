@@ -306,6 +306,25 @@ module.exports.CreateDB = function(meshserver) {
             id = formatId(id);
             return obj.scriptFile.updateOne({ _id: id }, { $set: args });
         };
+        // ── Atomic per-node update for a batch run ─────────────────────────
+        // Avoids the read-modify-write race that lost ~303/326 completions
+        // on the 2026-05-26 Aura group test. Mongo updates the matching
+        // nodes[] entry by jobId in place, so concurrent completions never
+        // overwrite each other's snapshots.
+        // 'updates' is a plain object of field->value pairs; we prefix each
+        // with 'nodes.$[n].' for the positional operator.
+        obj.updateBatchNode = function(batchRunId, jobId, updates) {
+            batchRunId = formatId(batchRunId);
+            var setObj = {};
+            Object.keys(updates).forEach(function(k) {
+                setObj['nodes.$[n].' + k] = updates[k];
+            });
+            return obj.scriptFile.updateOne(
+                { _id: batchRunId, type: 'batchRun' },
+                { $set: setObj },
+                { arrayFilters: [{ 'n.jobId': jobId }] }
+            );
+        };
         obj.deletePendingBatchJobs = function(batchRunId) {
             return obj.scriptFile.deleteMany({ type: 'job', batchRunId: batchRunId, completeTime: null });
         };

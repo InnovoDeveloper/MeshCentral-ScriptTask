@@ -159,6 +159,19 @@ module.exports.innovoscripttask = function (parent) {
     };
 
     obj.batchTick = function() {
+        // NOTE on the lost-update class of bugs:
+        // The batchTick fires every 10s. It does getActiveBatchRuns -> mutate
+        // node statuses in a local copy -> updateBatchRun({ nodes: run.nodes }).
+        // This is technically still racy against concurrent onBatchJobComplete
+        // calls (the high-frequency atomic-update path), but in practice the
+        // tick only modifies nodes that transitioned to 'unresponsive' (heartbeat
+        // timeout) or 'unresponsive' (batch timeout) — states which means the
+        // node was NOT going to receive a fresh 'completed' update from a
+        // concurrent jobComplete anyway. If this assumption breaks (e.g. an
+        // agent recovers and reports right at the heartbeat-timeout boundary),
+        // the worst case is the agent's late completion gets reverted to
+        // 'unresponsive'. Mitigation if it ever bites: refactor the tick to
+        // use updateBatchNode per affected node, same as onBatchJobComplete.
         var now = Math.floor(Date.now() / 1000);
         obj.db.getActiveBatchRuns()
         .then(function(runs) {
@@ -408,51 +421,72 @@ module.exports.innovoscripttask = function (parent) {
         .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: Queue dispatch error:', e); });
     };
 
-    obj.onBatchJobComplete = function(jobId, batchRunId, retVal, errVal) {
-        obj.db.getBatchRun(batchRunId)
-        .then(function(runs) {
-            if (runs.length === 0) return;
-            var run = runs[0];
-            var now = Math.floor(Date.now() / 1000);
-            // Find the node entry and update it
-            for (var i = 0; i < run.nodes.length; i++) {
-                var jobIdStr = (run.nodes[i].jobId || '').toString();
-                var matchId = (jobId || '').toString();
-                if (jobIdStr === matchId) {
-                    run.nodes[i].status = errVal ? 'error' : 'completed';
-                    run.nodes[i].completeTime = now;
-                    // Store up to 64 KB of stdout per node. Patch 7's auto-chain (Patch 6 +
-                    // FSI + add-to + refresh-tags) produces multi-KB output; the old 500-char
-                    // cap was lossy enough that the Phase 3 results view couldn't diagnose
-                    // failures. Cap exists only to keep the batch run doc well under Mongo's
-                    // 16 MB limit (50 devices x 64 KB = ~3 MB).
-                    var MAX_BATCH_RETVAL = 65536;
-                    run.nodes[i].returnVal = retVal ? (retVal.length > MAX_BATCH_RETVAL ? retVal.substring(0, MAX_BATCH_RETVAL - 32) + '\n... [truncated at ' + MAX_BATCH_RETVAL + ' chars]' : retVal) : null;
-                    run.nodes[i].errorVal = errVal || null;
-                    break;
-                }
-            }
-            obj.recalcBatchCounts(run);
-            obj.db.updateBatchRun(run._id, { nodes: run.nodes, counts: run.counts });
-            obj.sendBatchProgress(run);
+    // Per-batch debounce timers so we don't write the counts to Mongo on
+    // every single completion. After the last completion arrives, ~250 ms
+    // later we read the run once, recalc counts, write counts + push a
+    // single progress event to the UI.
+    obj.batchCountsDebounce = obj.batchCountsDebounce || {};
+    obj.scheduleBatchCountsRecalc = function(batchRunId) {
+        if (obj.batchCountsDebounce[batchRunId]) return;
+        obj.batchCountsDebounce[batchRunId] = setTimeout(function() {
+            delete obj.batchCountsDebounce[batchRunId];
+            obj.db.getBatchRun(batchRunId)
+            .then(function(runs) {
+                if (!runs.length) return;
+                var run = runs[0];
+                obj.recalcBatchCounts(run);
+                return obj.db.updateBatchRun(run._id, { counts: run.counts })
+                .then(function() {
+                    obj.sendBatchProgress(run);
+                    // Mark the whole batch complete if every node has reached a terminal state.
+                    if (run.currentBatchIndex >= run.totalBatches) {
+                        var stillRunning = run.nodes.filter(function(n) { return n.status === 'dispatched' || n.status === 'queued'; });
+                        if (stillRunning.length === 0 && run.status !== 'completed') {
+                            obj.completeBatchRun(run);
+                        }
+                    }
+                });
+            })
+            .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: Batch counts recalc error:', e); });
+        }, 250);
+    };
 
-            // Check if all batches dispatched and all nodes done
-            if (run.currentBatchIndex >= run.totalBatches) {
-                var stillRunning = run.nodes.filter(function(n) { return n.status === 'dispatched' || n.status === 'queued'; });
-                if (stillRunning.length === 0) {
-                    obj.completeBatchRun(run);
-                }
+    obj.onBatchJobComplete = function(jobId, batchRunId, retVal, errVal) {
+        // Atomic positional update — race-free. The earlier
+        // read-modify-write path lost ~303/326 completions on the
+        // 2026-05-26 Aura group test because concurrent handlers all
+        // started from the same getBatchRun snapshot and the last
+        // updateBatchRun overwrote everyone else's changes.
+        var MAX_BATCH_RETVAL = 65536;
+        var truncated = retVal ? (retVal.length > MAX_BATCH_RETVAL ? retVal.substring(0, MAX_BATCH_RETVAL - 32) + '\n... [truncated at ' + MAX_BATCH_RETVAL + ' chars]' : retVal) : null;
+        var updates = {
+            status: errVal ? 'error' : 'completed',
+            completeTime: Math.floor(Date.now() / 1000),
+            returnVal: truncated,
+            errorVal: errVal || null
+        };
+        obj.db.updateBatchNode(batchRunId, jobId, updates)
+        .then(function(res) {
+            if (!res.matchedCount) {
+                console.log('PLUGIN: InnovoScriptTask: onBatchJobComplete — no matching node for jobId ' + jobId + ' in batch ' + batchRunId);
+                return;
             }
+            // Debounced counts recompute + UI push (coalesces concurrent completions).
+            obj.scheduleBatchCountsRecalc(batchRunId);
         })
         .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: Batch job complete error:', e); });
     };
 
     obj.completeBatchRun = function(run) {
+        // Note: do NOT write 'nodes' here. Per-node fields are updated
+        // atomically by updateBatchNode() in onBatchJobComplete; writing
+        // the whole array back would overwrite concurrent per-node updates
+        // (the same lost-update bug we just fixed for onBatchJobComplete).
         var now = Math.floor(Date.now() / 1000);
         obj.recalcBatchCounts(run);
         run.status = 'completed';
         run.completedAt = now;
-        obj.db.updateBatchRun(run._id, { status: 'completed', completedAt: now, counts: run.counts, nodes: run.nodes });
+        obj.db.updateBatchRun(run._id, { status: 'completed', completedAt: now, counts: run.counts });
         obj.sendBatchProgress(run);
         console.log('PLUGIN: InnovoScriptTask: Batch run completed — ' + run.counts.completed + ' ok, ' + run.counts.errored + ' failed, ' + run.counts.skipped + ' skipped');
     };
