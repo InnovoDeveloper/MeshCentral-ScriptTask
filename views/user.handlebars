@@ -620,6 +620,7 @@
               <div style="padding: 4px 12px; font-size: 11px; color: var(--fg3);">
                 <label style="display:inline;"><input type="checkbox" onclick="selAllNodes(this);"> Select All</label>
                 <span id="arSelectedCount" style="margin-left: 12px;">0 selected</span>
+                <a id="arClearManual" href="javascript:void(0);" onclick="clearManualOverrides();" style="margin-left:12px;color:var(--accent);font-size:11px;cursor:pointer;display:none;text-decoration:underline;">Clear manual overrides</a>
               </div>
               <div id="arColumns">
                 <div>
@@ -882,7 +883,11 @@ function updateNodesTable() {
           lbl.setAttribute('data-online', isOnline ? '1' : '0');
           lbl.setAttribute('data-tagged', hasDeviceTags ? '1' : '0');
           for (var k in ti.kv) { lbl.setAttribute('data-kv-' + k, ti.kv[k]); }
-          lbl.innerHTML = '<input type="checkbox" ' + checked + ' name="runOn[]" value="' + item._id + '" onchange="updateSelectedCount();"> ' + onlineDot + escHtml(item.name) + badges;
+          // onchange marks the row as a 'manual override' so subsequent
+          // facet auto-toggles don't undo it. Use event.isTrusted to
+          // distinguish real user clicks from programmatic .checked = X
+          // assignments triggered by applyFacetFilters.
+          lbl.innerHTML = '<input type="checkbox" ' + checked + ' name="runOn[]" value="' + item._id + '" onchange="onNodeRowToggle(event, this);"> ' + onlineDot + escHtml(item.name) + badges;
           nodeList.appendChild(lbl);
 
           hiddenTbl.insertAdjacentHTML('beforeend', '<tr><td><input type="checkbox" ' + checked + ' name="runOn[]" value="' + item._id + '"></td></tr>');
@@ -996,6 +1001,16 @@ function applyFacetFilters() {
         facetSets[f].add(cb.value);
     });
 
+    // "Any filter active" guards the hybrid auto-toggle. If the operator
+    // hasn't touched any facet/text/status filter, we don't want to
+    // suddenly deselect rows just because the filter machinery ran.
+    var anyFilterActive =
+        !!query ||
+        !!typeFilter ||
+        Object.keys(kvSelectFilters).length > 0 ||
+        Object.keys(facetSets).length > 0 ||
+        arStatusFilter !== 'all';
+
     var nodes = document.querySelectorAll('#arNodeList .arNodeItem');
     var visibleCount = 0;
     nodes.forEach(function(lbl) {
@@ -1043,6 +1058,26 @@ function applyFacetFilters() {
         var show = matchStatus && matchQ && matchTypeDropdown && matchKvDropdown && matchFacets;
         lbl.style.display = show ? '' : 'none';
         if (show) visibleCount++;
+
+        // ── Hybrid auto-toggle ──────────────────────────────────────────
+        // If ANY facet/text/status filter is currently active and this row
+        // has NOT been manually toggled by the operator, mirror the visible
+        // state into the per-node checkbox: visible = selected, hidden =
+        // deselected. This makes "checking Aura" automatically select all
+        // Aura devices without a separate 'Select Visible' click. Manual
+        // overrides (data-manual="1") are preserved so the operator can
+        // fine-tune individual rows and have those choices stick across
+        // later facet changes.
+        if (anyFilterActive && lbl.getAttribute('data-manual') !== '1') {
+            var cb = lbl.querySelector('input[name="runOn[]"]');
+            if (cb && cb.checked !== show) {
+                cb.checked = show;
+                // sync hidden mirror checkbox (the table off-screen one used
+                // for legacy form submission)
+                var mirror = Q('mRunTbl') && Q('mRunTbl').querySelector('input[value="' + cb.value + '"]');
+                if (mirror) mirror.checked = show;
+            }
+        }
     });
 
     // Surface the visible count alongside the selected count.
@@ -1060,11 +1095,55 @@ function applyFacetFilters() {
     }
     if (vc) vc.textContent = visibleCount + ' visible';
 
+    // Show / hide the 'clear manual overrides' link based on whether any
+    // exist. The label updates with the override count.
+    var manualCount = document.querySelectorAll('#arNodeList .arNodeItem[data-manual="1"]').length;
+    var clr = Q('arClearManual');
+    if (clr) {
+        if (manualCount > 0) {
+            clr.style.display = '';
+            clr.textContent = 'Clear ' + manualCount + ' manual override' + (manualCount === 1 ? '' : 's');
+        } else {
+            clr.style.display = 'none';
+        }
+    }
+
     updateSelectedCount();
 }
 
 // Backwards compatibility — older code calls filterAdvancedRun().
 function filterAdvancedRun() { applyFacetFilters(); }
+
+// Per-node checkbox toggle. Distinguishes real user clicks from
+// programmatic .checked = X assignments via event.isTrusted. A real click
+// marks the row as a 'manual override' so subsequent facet auto-toggles
+// don't undo it.
+function onNodeRowToggle(ev, cb) {
+    if (ev && ev.isTrusted) {
+        var lbl = cb.closest('.arNodeItem');
+        if (lbl) lbl.setAttribute('data-manual', '1');
+    }
+    // Keep the hidden mirror checkbox in sync for any legacy form code.
+    var mirror = Q('mRunTbl') && Q('mRunTbl').querySelector('input[value="' + cb.value + '"]');
+    if (mirror) mirror.checked = cb.checked;
+    updateSelectedCount();
+    // Update the manual-override clear-link visibility.
+    var manualCount = document.querySelectorAll('#arNodeList .arNodeItem[data-manual="1"]').length;
+    var clr = Q('arClearManual');
+    if (clr) {
+        if (manualCount > 0) { clr.style.display = ''; clr.textContent = 'Clear ' + manualCount + ' manual override' + (manualCount === 1 ? '' : 's'); }
+        else clr.style.display = 'none';
+    }
+}
+
+// Wipe all manual-override flags. Subsequent facet changes will once
+// again auto-select/deselect every visible row.
+function clearManualOverrides() {
+    document.querySelectorAll('#arNodeList .arNodeItem[data-manual="1"]').forEach(function(lbl) {
+        lbl.removeAttribute('data-manual');
+    });
+    applyFacetFilters();
+}
 
 function selVisibleNodes(checked) {
     var nodes = document.querySelectorAll('#arNodeList .arNodeItem');
