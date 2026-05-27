@@ -1420,14 +1420,21 @@ function renderBatchCard(run) {
         var n = rec.n;
         var stColor = n.status === 'completed' ? 'var(--green)' : n.status === 'error' ? 'var(--red)' : n.status === 'unresponsive' ? '#ea580c' : n.status === 'skipped' ? '#9ca3af' : n.status === 'dispatched' ? 'var(--yellow)' : n.status === 'queued' ? '#3b82f6' : 'var(--fg3)';
         var detail = n.errorVal ? ' — ' + escHtml(n.errorVal).substring(0, 100) : n.returnVal ? ' — ' + escHtml(n.returnVal).substring(0, 80) : '';
-        // Open in a NEW MC tab/window. Use the canonical MC URL pattern
-        // (?viewmode=10&gotonode=<suffix>) so the new tab boots straight
-        // into the device's Console panel. _id is "node/<domain>/<suffix>";
-        // the suffix is the third segment.
+        // Open in a NEW MC tab. MC's node IDs ("node/<domain>/<suffix>")
+        // already use URL-safe-base64 alphabet for the suffix — '@' '$' '+'
+        // and friends survive raw in the URL. encodeURIComponent() would
+        // corrupt them (e.g. '@' -> '%40'), and MC's URL handler then
+        // rejects the value because isSafeString2() in common-0.0.1.js
+        // (line 116) filters any string containing '%'. Net effect: the
+        // new tab opens, sees no valid gotonode, falls back to the home
+        // view — exactly the bug observed. Mirror MC's own shift-click
+        // pattern from default.handlebars line ~19003: raw suffix, no
+        // encoding. Build the href via JS (window.open) so the literal
+        // '@' isn't HTML-attribute-parsed weirdly.
         var nodeIdParts = (n.nodeId || '').split('/');
         var nodeIdSuffix = nodeIdParts.length >= 3 ? nodeIdParts[2] : (n.nodeId || '');
-        var nodeIdSuffixEnc = encodeURIComponent(nodeIdSuffix);
-        var nodeLink = '<a href="/?viewmode=10&gotonode=' + nodeIdSuffixEnc + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Open device in new tab">' + escHtml(n.nodeName || n.nodeId) + '</a>';
+        var nodeIdSuffixJs = nodeIdSuffix.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        var nodeLink = '<a href="javascript:void(0);" target="_blank" rel="noopener" onclick="event.stopPropagation(); openDeviceTab(\'' + nodeIdSuffixJs + '\'); return false;" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Open device in new tab">' + escHtml(n.nodeName || n.nodeId) + '</a>';
         // Row click opens the full-output modal. Skip the click handler on rows that
         // have nothing to show yet (pending/queued/dispatched with no output).
         var hasOutput = !!(n.returnVal || n.errorVal);
@@ -1721,6 +1728,32 @@ function exportBatchCsv(batchId) {
 // a header per device so it's pasteable into an incident doc or Slack.
 // The button passes its own DOM node as the second arg so we can flash
 // the label without needing an id.
+// Open a MeshCentral device in a new browser tab. The suffix MUST be
+// passed RAW (no encodeURIComponent) because MC's client-side URL parser
+// (common-0.0.1.js parseUriArgs + isSafeString2) rejects any string
+// containing '%', which means a percent-encoded '@' or '$' silently
+// drops the gotonode parameter and the new tab lands on home.
+// We use window.open with the literal URL — browsers don't auto-encode
+// when the URL is passed to window.open directly.
+function openDeviceTab(suffix) {
+    if (!suffix) return;
+    var origin = (window.parent && window.parent.location && window.parent.location.origin) || window.location.origin;
+    // Domain segment: on MC's default domain it's empty, so the URL is
+    // origin + '/?...'. If a non-default domain is in use, MC's parent
+    // frame's location.pathname will start with /<domain>/ and we should
+    // include that so cookie scope matches. Best-effort.
+    var domainurl = '/';
+    try {
+        var p = window.parent.location.pathname || '/';
+        // Take everything up to and including the trailing slash before the
+        // last segment (which is index/admin/etc.). Example: '/abc/'
+        var m = p.match(/^(\/[^\/]+\/)?/);
+        if (m && m[1] && m[1] !== '/n/' && m[1] !== '/messenger/') { domainurl = m[1]; }
+    } catch (e) { /* cross-origin shouldn't happen; we're same-origin */ }
+    var url = origin + domainurl + '?viewmode=10&gotonode=' + suffix + '&hide=16';
+    window.open(url, 'mc-device-' + suffix);
+}
+
 function copyBatchAll(batchId, btn) {
     var run = batchRunCache[batchId];
     if (!run) { console.warn('copyBatchAll: no cached run for', batchId); return; }
