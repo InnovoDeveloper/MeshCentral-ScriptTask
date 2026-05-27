@@ -67,6 +67,46 @@
       width: 65%; overflow-y: auto; min-height: 0;
     }
 
+    /* ── Advanced Run fullscreen mode ─────────────── */
+    /* When the operator clicks the maximize icon in the Advanced Run
+     * section, body.arFullscreen kicks in: left script tree hides, right
+     * panel takes the entire iframe, and node columns get vertical room. */
+    body.arFullscreen #scriptContainer,
+    body.arFullscreen #controlBar,
+    body.arFullscreen #uploadBar {
+      display: none !important;
+    }
+    body.arFullscreen #infoContainer {
+      width: 100% !important;
+    }
+    body.arFullscreen #arColumns > div {
+      max-height: calc(100vh - 180px) !important;
+    }
+    /* Hide non-Advanced-Run sections in fullscreen so the user isn't
+     * fighting accordion noise while picking devices. */
+    body.arFullscreen #batchRuns,
+    body.arFullscreen #nSch,
+    body.arFullscreen #sSch,
+    body.arFullscreen #scriptHistory,
+    body.arFullscreen #nodeHistory,
+    body.arFullscreen #variables {
+      display: none !important;
+    }
+    body.arFullscreen .infoBar {
+      /* Hide siblings of Advanced Run; keep the Advanced Run bar itself
+       * (it's the one before #multiRun). */
+    }
+    body.arFullscreen #history > .infoBar:not(#arInfoBar) {
+      display: none !important;
+    }
+    .arFullscreenBtn {
+      margin-left: auto; padding: 2px 6px; font-size: 11px;
+      background: transparent; border: 1px solid var(--border2); border-radius: var(--radius);
+      color: var(--fg2); cursor: pointer; line-height: 1;
+    }
+    .arFullscreenBtn:hover { color: var(--accent); border-color: var(--accent); }
+    .arFullscreenBtn svg { vertical-align: middle; }
+
     /* ── Filter bar ──────────────────────────────── */
     #scriptFilterBar {
       padding: 8px 10px; display: flex; gap: 6px; align-items: center;
@@ -344,9 +384,9 @@
     }
     #batchOutputOverlay.visible { display: flex; }
     #batchOutputBox {
-      background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius);
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-      width: 90vw; max-width: 1100px; height: 80vh;
+      background: var(--bg); border: none; border-radius: 0;
+      box-shadow: none;
+      width: 100vw; max-width: none; height: 100vh;
       display: flex; flex-direction: column; overflow: hidden;
     }
     #batchOutputHead {
@@ -458,8 +498,11 @@
       </div>
       <div class="boBtns">
         <input type="text" class="boFind" id="boFind" placeholder="Find in output..." oninput="findInBatchOutput()" />
-        <button onclick="copyBatchOutput()" title="Copy output to clipboard">Copy</button>
-        <button onclick="closeBatchOutput()">Close</button>
+        <button id="boCopyBtn" onclick="copyBatchOutput()" title="Copy full output to clipboard" aria-label="Copy output">
+          <svg viewBox="0 0 16 16" width="14" height="14" style="vertical-align:middle;display:inline-block;fill:currentColor;"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
+          <span id="boCopyLabel">Copy</span>
+        </button>
+        <button onclick="closeBatchOutput()" title="Close (Esc)">Close</button>
       </div>
     </div>
     <div id="batchOutputMeta"></div>
@@ -501,7 +544,12 @@
         <div class="si-desc" id="siDesc"></div>
       </div>
       <div id="history">
-          <div class="infoBar">Advanced Run</div>
+          <div class="infoBar" id="arInfoBar">
+            <span>Advanced Run</span>
+            <button class="arFullscreenBtn" id="arFullscreenBtn" onclick="event.stopPropagation(); toggleArFullscreen();" title="Toggle fullscreen (Esc to exit)" aria-label="Toggle fullscreen">
+              <svg id="arFsIcon" viewBox="0 0 16 16" width="14" height="14" style="fill:currentColor;"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"/></svg>
+            </button>
+          </div>
           <div id="multiRun" class="infoContent">
               <div style="padding: 6px 12px; border-bottom: 1px solid var(--border); display:flex; align-items:center; gap:8px;">
                 <div class="arFilterPills" id="arStatusPills">
@@ -1318,8 +1366,11 @@ function renderBatchCard(run) {
         var n = rec.n;
         var stColor = n.status === 'completed' ? 'var(--green)' : n.status === 'error' ? 'var(--red)' : n.status === 'unresponsive' ? '#ea580c' : n.status === 'skipped' ? '#9ca3af' : n.status === 'dispatched' ? 'var(--yellow)' : n.status === 'queued' ? '#3b82f6' : 'var(--fg3)';
         var detail = n.errorVal ? ' — ' + escHtml(n.errorVal).substring(0, 100) : n.returnVal ? ' — ' + escHtml(n.returnVal).substring(0, 80) : '';
-        var shortId = (n.nodeId || '').replace('node//', '');
-        var nodeLink = '<a href="/?viewmode=10&gotonode=' + encodeURIComponent(shortId) + '" target="_top" style="color:inherit;text-decoration:none;" onclick="event.stopPropagation();" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + escHtml(n.nodeName || n.nodeId) + '</a>';
+        // Use MC's canonical gotoDevice() API rather than URL routing — the
+        // /?viewmode=10&gotonode=... path requires the domain segment that's
+        // baked into the nodeId, and full-page navigation breaks the iframe.
+        var fullNodeId = (n.nodeId || '').replace(/'/g, "\\'");
+        var nodeLink = '<a href="javascript:void(0);" onclick="parent.gotoDevice(\'' + fullNodeId + '\', 10); event.stopPropagation(); return false;" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + escHtml(n.nodeName || n.nodeId) + '</a>';
         // Row click opens the full-output modal. Skip the click handler on rows that
         // have nothing to show yet (pending/queued/dispatched with no output).
         var hasOutput = !!(n.returnVal || n.errorVal);
@@ -1487,20 +1538,49 @@ function fallbackCopy(s) {
 }
 
 function flashCopyButton() {
-    var btns = document.querySelectorAll('#batchOutputHead .boBtns button');
-    if (!btns.length) return;
-    var copyBtn = btns[0];
-    var orig = copyBtn.textContent;
-    copyBtn.textContent = 'Copied!';
-    setTimeout(function() { copyBtn.textContent = orig; }, 900);
+    var lbl = document.getElementById('boCopyLabel');
+    if (!lbl) return;
+    var orig = lbl.textContent;
+    lbl.textContent = 'Copied!';
+    setTimeout(function() { lbl.textContent = orig; }, 900);
 }
 
 // Esc closes the modal.
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && document.getElementById('batchOutputOverlay').classList.contains('visible')) {
-        closeBatchOutput();
+    if (e.key === 'Escape') {
+        if (document.getElementById('batchOutputOverlay').classList.contains('visible')) {
+            closeBatchOutput();
+        } else if (document.body.classList.contains('arFullscreen')) {
+            toggleArFullscreen();
+        }
     }
 });
+
+// ── Advanced Run fullscreen toggle ─────────────────────────────────────────
+// Hides the left script tree + top toolbar via body.arFullscreen so the
+// node-picker + filter columns get the full iframe width. Independent of
+// the output modal — both can be toggled separately.
+function toggleArFullscreen() {
+    var on = document.body.classList.toggle('arFullscreen');
+    var icon = document.getElementById('arFsIcon');
+    if (icon) {
+        // Swap glyph: maximize (corners-out) vs restore (corners-in).
+        if (on) {
+            icon.innerHTML = '<path d="M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5m5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10 4.5v-4a.5.5 0 0 1 .5-.5M0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5m10 1a1.5 1.5 0 0 1 1.5-1.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0z"/>';
+        } else {
+            icon.innerHTML = '<path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"/>';
+        }
+    }
+    // Make sure the Advanced Run section is OPEN when entering fullscreen.
+    if (on) {
+        var mr = document.getElementById('multiRun');
+        if (mr) mr.style.display = 'block';
+        var bar = document.getElementById('arInfoBar');
+        if (bar && !bar.classList.contains('active')) bar.classList.add('active');
+    }
+    // Tell MC's iframe sizer that our height changed.
+    if (typeof resizeIframe === 'function') resizeIframe();
+}
 
 // ── Error-pattern grouping ──────────────────────────────────────────────────
 // Groups nodes that share an error pattern. Two nodes are "the same" if their
