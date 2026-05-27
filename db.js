@@ -313,8 +313,20 @@ module.exports.CreateDB = function(meshserver) {
         // overwrite each other's snapshots.
         // 'updates' is a plain object of field->value pairs; we prefix each
         // with 'nodes.$[n].' for the positional operator.
+        //
+        // IMPORTANT: jobId MUST be coerced to ObjectId. The stored
+        // run.nodes[i].jobId is an ObjectId, but command.jobId from the
+        // agent's jobComplete reply is a string. Mongo's arrayFilter does
+        // strict-equality compare; string !== ObjectId means matchedCount
+        // looks correct (the parent doc matched on _id) but modifiedCount
+        // is 0 — the per-node $set silently writes nothing. Coercing both
+        // sides via formatId() makes the filter actually match the array
+        // entry. Discovered during the 2026-05-27 42-device update-dietpi
+        // batch where the v1 race fix appeared to ship but 0/40 updates
+        // landed.
         obj.updateBatchNode = function(batchRunId, jobId, updates) {
             batchRunId = formatId(batchRunId);
+            try { jobId = formatId(jobId); } catch (e) { /* leave as-is */ }
             var setObj = {};
             Object.keys(updates).forEach(function(k) {
                 setObj['nodes.$[n].' + k] = updates[k];
