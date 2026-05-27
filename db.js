@@ -337,6 +337,22 @@ module.exports.CreateDB = function(meshserver) {
                 { arrayFilters: [{ 'n.jobId': jobId }] }
             );
         };
+        // ── Atomic per-node update keyed by nodeId (pre-dispatch state) ────
+        // Used by the dispatch path when a node doesn't yet have a jobId
+        // (still 'pending' or just becoming 'queued'/'skipped'). After
+        // dispatch when jobId is assigned, prefer updateBatchNode by jobId.
+        obj.updateBatchNodeByNodeId = function(batchRunId, nodeId, updates) {
+            batchRunId = formatId(batchRunId);
+            var setObj = {};
+            Object.keys(updates).forEach(function(k) {
+                setObj['nodes.$[n].' + k] = updates[k];
+            });
+            return obj.scriptFile.updateOne(
+                { _id: batchRunId, type: 'batchRun' },
+                { $set: setObj },
+                { arrayFilters: [{ 'n.nodeId': nodeId }] }
+            );
+        };
         obj.deletePendingBatchJobs = function(batchRunId) {
             return obj.scriptFile.deleteMany({ type: 'job', batchRunId: batchRunId, completeTime: null });
         };

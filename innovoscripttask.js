@@ -159,19 +159,11 @@ module.exports.innovoscripttask = function (parent) {
     };
 
     obj.batchTick = function() {
-        // NOTE on the lost-update class of bugs:
-        // The batchTick fires every 10s. It does getActiveBatchRuns -> mutate
-        // node statuses in a local copy -> updateBatchRun({ nodes: run.nodes }).
-        // This is technically still racy against concurrent onBatchJobComplete
-        // calls (the high-frequency atomic-update path), but in practice the
-        // tick only modifies nodes that transitioned to 'unresponsive' (heartbeat
-        // timeout) or 'unresponsive' (batch timeout) — states which means the
-        // node was NOT going to receive a fresh 'completed' update from a
-        // concurrent jobComplete anyway. If this assumption breaks (e.g. an
-        // agent recovers and reports right at the heartbeat-timeout boundary),
-        // the worst case is the agent's late completion gets reverted to
-        // 'unresponsive'. Mitigation if it ever bites: refactor the tick to
-        // use updateBatchNode per affected node, same as onBatchJobComplete.
+        // All node mutations in this function use the atomic
+        // updateBatchNodeByNodeId / updateBatchNode helpers (race-free).
+        // The whole-array `updateBatchRun({nodes: ...})` pattern that
+        // caused the 2026-05-27 lost-update mess has been removed
+        // throughout the dispatch + tick + heartbeat paths.
         var now = Math.floor(Date.now() / 1000);
         obj.db.getActiveBatchRuns()
         .then(function(runs) {
@@ -184,49 +176,51 @@ module.exports.innovoscripttask = function (parent) {
                         return n.status === 'dispatched' && n.lastHeartbeat && (now - n.lastHeartbeat) < 120;
                     });
                     if (!hasActiveHeartbeat) {
-                        // No devices actively reporting — safe to timeout
+                        // No devices actively reporting — safe to timeout.
+                        // Mark each non-terminal node 'unresponsive' atomically
+                        // so we don't clobber any in-flight jobComplete writes.
+                        var toMark = [];
                         run.nodes.forEach(function(n) {
                             if (n.status === 'pending' || n.status === 'dispatched' || n.status === 'queued') {
-                                n.status = 'unresponsive';
-                                n.errorVal = 'Batch timeout (' + Math.round(batchTimeout / 60) + 'm)';
+                                toMark.push(n);
                             }
                         });
-                        obj.recalcBatchCounts(run);
-                        run.status = 'completed';
-                        run.completedAt = now;
-                        obj.db.updateBatchRun(run._id, { status: 'completed', completedAt: now, nodes: run.nodes, counts: run.counts });
-                        obj.sendBatchProgress(run);
-                        console.log('PLUGIN: InnovoScriptTask: Batch run timed out after ' + Math.round((now - run.createdAt) / 60) + 'm — ' + run.counts.completed + ' ok, ' + (run.counts.errored + run.counts.unresponsive) + ' unresponsive, ' + run.counts.skipped + ' skipped');
+                        var errVal = 'Batch timeout (' + Math.round(batchTimeout / 60) + 'm)';
+                        var pendingWrites = toMark.map(function(n) {
+                            return obj.db.updateBatchNodeByNodeId(run._id, n.nodeId, { status: 'unresponsive', errorVal: errVal });
+                        });
+                        Promise.all(pendingWrites).then(function() {
+                            obj.db.updateBatchRun(run._id, { status: 'completed', completedAt: now });
+                            obj.scheduleBatchCountsRecalc(run._id);
+                        });
+                        console.log('PLUGIN: InnovoScriptTask: Batch run timed out after ' + Math.round((now - run.createdAt) / 60) + 'm — marking ' + toMark.length + ' nodes unresponsive');
                         return;
                     }
                     // else: at least one device still has fresh heartbeats — extend the batch
                 }
 
-                // Check dispatched nodes — heartbeat-aware timeout
+                // Check dispatched nodes — heartbeat-aware timeout. Mark each
+                // stale node 'unresponsive' atomically (not whole-array write).
                 var nodeTimeout = run.nodeTimeoutSec || 1800;
-                var staleFound = false;
+                var staleWrites = [];
                 run.nodes.forEach(function(n) {
                     if (n.status !== 'dispatched') return;
+                    var errVal = null;
                     if (n.lastHeartbeat) {
-                        // Agent was sending heartbeats — timeout from last heartbeat
                         if ((now - n.lastHeartbeat) > nodeTimeout) {
-                            n.status = 'unresponsive';
-                            n.errorVal = 'Lost contact (last heartbeat ' + Math.floor((now - n.lastHeartbeat) / 60) + 'm ago)';
-                            staleFound = true;
+                            errVal = 'Lost contact (last heartbeat ' + Math.floor((now - n.lastHeartbeat) / 60) + 'm ago)';
                         }
                     } else {
-                        // No heartbeat received — timeout from dispatch time
                         if (n.dispatchTime && (now - n.dispatchTime) > nodeTimeout) {
-                            n.status = 'unresponsive';
-                            n.errorVal = 'No response after ' + Math.round(nodeTimeout / 60) + 'm (no heartbeat)';
-                            staleFound = true;
+                            errVal = 'No response after ' + Math.round(nodeTimeout / 60) + 'm (no heartbeat)';
                         }
                     }
+                    if (errVal) {
+                        staleWrites.push(obj.db.updateBatchNodeByNodeId(run._id, n.nodeId, { status: 'unresponsive', errorVal: errVal }));
+                    }
                 });
-                if (staleFound) {
-                    obj.recalcBatchCounts(run);
-                    obj.db.updateBatchRun(run._id, { nodes: run.nodes, counts: run.counts });
-                    obj.sendBatchProgress(run);
+                if (staleWrites.length) {
+                    Promise.all(staleWrites).then(function() { obj.scheduleBatchCountsRecalc(run._id); });
                 }
 
                 // Check if it's time for the next batch
@@ -273,39 +267,48 @@ module.exports.innovoscripttask = function (parent) {
                 return;
             }
 
+            // Handle offline nodes FIRST with atomic per-node updates.
+            // Each node mutation is persisted independently so concurrent
+            // jobComplete handlers (atomic too) don't get clobbered by a
+            // stale whole-array write.
+            var offlinePromises = [];
             nodesInBatch.forEach(function(nodeEntry) {
-                // Check if device is online
                 if (onlineAgents.indexOf(nodeEntry.nodeId) === -1) {
-                    // Offline handling based on policy
+                    var u = null;
                     if (run.offlinePolicy === 'queue') {
                         nodeEntry.status = 'queued';
                         nodeEntry.errorVal = 'Waiting for device to come online';
+                        u = { status: 'queued', errorVal: 'Waiting for device to come online' };
                     } else if (run.offlinePolicy === 'defer' && batchIndex < run.totalBatches - 1) {
-                        nodeEntry.batchIndex = batchIndex + 1; // Move to next batch
+                        nodeEntry.batchIndex = batchIndex + 1;
                         nodeEntry.deferCount = (nodeEntry.deferCount || 0) + 1;
+                        u = { batchIndex: nodeEntry.batchIndex, deferCount: nodeEntry.deferCount };
                         if (nodeEntry.deferCount >= 3) {
                             nodeEntry.status = 'skipped';
                             nodeEntry.errorVal = 'Offline after 3 defer attempts';
+                            u.status = 'skipped';
+                            u.errorVal = 'Offline after 3 defer attempts';
                         }
                     } else {
                         nodeEntry.status = 'skipped';
                         nodeEntry.errorVal = 'Device offline at dispatch time';
+                        u = { status: 'skipped', errorVal: 'Device offline at dispatch time' };
                     }
+                    if (u) offlinePromises.push(obj.db.updateBatchNodeByNodeId(run._id, nodeEntry.nodeId, u));
                     return;
                 }
 
-                // Schedule staggered dispatch
+                // Schedule staggered dispatch for online nodes
                 (function(ne, delayMs) {
                     setTimeout(function() {
                         var dispatchTime = Math.floor(Date.now() / 1000);
-                        // Create the job
                         obj.db.addJob({
                             scriptId: run.scriptId,
                             scriptName: run.scriptName,
                             node: ne.nodeId,
                             runBy: run.createdBy,
                             batchRunId: run._id,
-                            dispatchTime: dispatchTime // Set immediately so queueRun skips it
+                            dispatchTime: dispatchTime
                         })
                         .then(function(result) {
                             var jobId = result.insertedId || (result.ops && result.ops[0] && result.ops[0]._id);
@@ -313,7 +316,7 @@ module.exports.innovoscripttask = function (parent) {
                             ne.status = 'dispatched';
                             ne.dispatchTime = dispatchTime;
 
-                            // Dispatch to agent
+                            var dispatchErr = null;
                             try {
                                 var jObj = {
                                     action: 'plugin',
@@ -329,15 +332,27 @@ module.exports.innovoscripttask = function (parent) {
                             } catch (e) {
                                 ne.status = 'error';
                                 ne.errorVal = 'Dispatch failed: ' + e.message;
+                                dispatchErr = e;
                             }
 
-                            // Update batch run in DB
-                            obj.recalcBatchCounts(run);
-                            obj.db.updateBatchRun(run._id, { nodes: run.nodes, counts: run.counts });
+                            // ATOMIC per-node update keyed by nodeId (jobId
+                            // not yet stored on the doc side). After this
+                            // write, run.nodes[i].jobId is set, so future
+                            // jobComplete handlers find it via the jobId
+                            // arrayFilter.
+                            var updates = dispatchErr
+                                ? { status: 'error', errorVal: ne.errorVal, jobId: jobId, dispatchTime: dispatchTime }
+                                : { status: 'dispatched', jobId: jobId, dispatchTime: dispatchTime };
+                            obj.db.updateBatchNodeByNodeId(run._id, ne.nodeId, updates)
+                            .then(function() {
+                                obj.scheduleBatchCountsRecalc(run._id);
+                            })
+                            .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: dispatchBatch updateBatchNodeByNodeId failed:', e); });
                         })
                         .catch(function(e) {
                             ne.status = 'error';
                             ne.errorVal = 'Job creation failed: ' + e.message;
+                            obj.db.updateBatchNodeByNodeId(run._id, ne.nodeId, { status: 'error', errorVal: ne.errorVal });
                         });
                     }, delayMs);
                 })(nodeEntry, delay);
@@ -345,20 +360,18 @@ module.exports.innovoscripttask = function (parent) {
                 delay += staggerMs;
             });
 
-            // Update batch run state
+            // Persist offline updates + batch index, NOT the whole nodes[].
+            // Offline writes already happened atomically above.
             var nextBatchAt = now + run.batchIntervalSec;
             obj.db.updateBatchRun(run._id, {
                 currentBatchIndex: batchIndex + 1,
                 lastBatchStartedAt: now,
-                nextBatchAt: nextBatchAt,
-                nodes: run.nodes
+                nextBatchAt: nextBatchAt
             });
 
-            // Send progress after stagger completes
+            // Send progress after stagger completes — counts only, no nodes.
             setTimeout(function() {
-                obj.recalcBatchCounts(run);
-                obj.db.updateBatchRun(run._id, { counts: run.counts, nodes: run.nodes });
-                obj.sendBatchProgress(run);
+                obj.scheduleBatchCountsRecalc(run._id);
             }, delay + 1000);
         })
         .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: Batch dispatch error:', e); });
@@ -393,6 +406,7 @@ module.exports.innovoscripttask = function (parent) {
                             ne.jobId = jobId;
                             ne.status = 'dispatched';
                             ne.dispatchTime = dispatchTime;
+                            var dispatchErr = null;
                             try {
                                 obj.meshServer.webserver.wsagents[ne.nodeId].send(JSON.stringify({
                                     action: 'plugin', plugin: 'innovoscripttask',
@@ -403,14 +417,20 @@ module.exports.innovoscripttask = function (parent) {
                             } catch (e) {
                                 ne.status = 'error';
                                 ne.errorVal = 'Dispatch failed: ' + e.message;
+                                dispatchErr = e;
                             }
-                            obj.recalcBatchCounts(run);
-                            obj.db.updateBatchRun(run._id, { nodes: run.nodes, counts: run.counts });
-                            obj.sendBatchProgress(run);
+                            // Atomic per-node update (race-free)
+                            var updates = dispatchErr
+                                ? { status: 'error', errorVal: ne.errorVal, jobId: jobId, dispatchTime: dispatchTime }
+                                : { status: 'dispatched', jobId: jobId, dispatchTime: dispatchTime };
+                            obj.db.updateBatchNodeByNodeId(run._id, ne.nodeId, updates)
+                            .then(function() { obj.scheduleBatchCountsRecalc(run._id); })
+                            .catch(function(e) { console.log('PLUGIN: InnovoScriptTask: dispatchQueuedNodes update failed:', e); });
                         })
                         .catch(function(e) {
                             ne.status = 'error';
                             ne.errorVal = 'Job creation failed: ' + e.message;
+                            obj.db.updateBatchNodeByNodeId(run._id, ne.nodeId, { status: 'error', errorVal: ne.errorVal });
                         });
                     }, delayMs);
                 })(nodeEntry, delay);
@@ -520,7 +540,7 @@ module.exports.innovoscripttask = function (parent) {
         var staggerSec = Math.max(1, parseInt(command.staggerSec) || 2);
         var offlinePolicy = command.offlinePolicy || 'skip';
         var batchTimeoutSec = Math.max(300, parseInt(command.batchTimeoutSec) || 7200); // default 2h, min 5m
-        var nodeTimeoutSec = Math.max(120, parseInt(command.nodeTimeoutSec) || 600); // default 10m, min 2m
+        var nodeTimeoutSec = Math.max(120, parseInt(command.nodeTimeoutSec) || 1800); // default 30m, min 2m
         var now = Math.floor(Date.now() / 1000);
 
         // Check max concurrent batch runs
@@ -1132,21 +1152,19 @@ module.exports.innovoscripttask = function (parent) {
             break;
             case 'jobHeartbeat':
                 if (command.jobId) {
+                    // Race-free heartbeat: atomic per-node update by jobId.
+                    // We don't need to read the run first — the arrayFilter
+                    // on jobId scopes the write to the right element.
                     obj.db.getActiveBatchRuns()
                     .then(function(runs) {
                         var now = Math.floor(Date.now() / 1000);
-                        var jobIdStr = (command.jobId || '').toString();
                         runs.forEach(function(run) {
-                            var updated = false;
-                            for (var i = 0; i < run.nodes.length; i++) {
-                                if (run.nodes[i].jobId && run.nodes[i].jobId.toString() === jobIdStr && run.nodes[i].status === 'dispatched') {
-                                    run.nodes[i].lastHeartbeat = now;
-                                    updated = true;
-                                    break;
-                                }
-                            }
-                            if (updated) {
-                                obj.db.updateBatchRun(run._id, { nodes: run.nodes });
+                            var matched = run.nodes.some(function(n) {
+                                return n.jobId && n.jobId.toString() === command.jobId.toString();
+                            });
+                            if (matched) {
+                                obj.db.updateBatchNode(run._id, command.jobId, { lastHeartbeat: now })
+                                .catch(function(e) { /* swallow heartbeat errors */ });
                             }
                         });
                     })
