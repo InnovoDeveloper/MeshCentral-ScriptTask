@@ -67,23 +67,47 @@
       width: 65%; overflow-y: auto; min-height: 0;
     }
 
-    /* ── Advanced Run fullscreen mode ─────────────── */
-    /* When the operator clicks the maximize icon in the Advanced Run
-     * section, body.arFullscreen kicks in: left script tree hides, right
-     * panel takes the entire iframe, and node columns get vertical room. */
+    /* ── Plugin-section fullscreen mode ───────────── */
+    /* body.arFullscreen (Advanced Run) or body.brFullscreen (Batch Runs)
+     * collapses everything but the target section to fill the entire
+     * plugin iframe. The iframe itself is sized to calc(100vh - 80px) by
+     * the plugin's parent shell, so 100vh inside == iframe viewport.
+     * We force html/body/scripts_endpoints/infoContainer/history to take
+     * that full height so the target section's flex:1 child actually has
+     * room to grow. */
+    body.arFullscreen,
+    body.brFullscreen {
+      height: 100vh !important; overflow: hidden !important;
+    }
+    body.arFullscreen #scriptTaskUser,
+    body.brFullscreen #scriptTaskUser {
+      height: 100vh !important;
+    }
+    body.arFullscreen #scripts_endpoints,
+    body.brFullscreen #scripts_endpoints {
+      height: 100% !important; flex: 1 1 auto !important;
+    }
+    body.arFullscreen #infoContainer,
+    body.brFullscreen #infoContainer {
+      width: 100% !important; height: 100% !important;
+      display: flex !important; flex-direction: column !important;
+    }
+    body.arFullscreen #history,
+    body.brFullscreen #history {
+      flex: 1 1 auto !important; display: flex !important; flex-direction: column !important;
+      min-height: 0 !important;
+    }
+    /* Common: hide tree pane + toolbars in either fullscreen mode */
     body.arFullscreen #scriptContainer,
     body.arFullscreen #controlBar,
-    body.arFullscreen #uploadBar {
+    body.arFullscreen #uploadBar,
+    body.brFullscreen #scriptContainer,
+    body.brFullscreen #controlBar,
+    body.brFullscreen #uploadBar {
       display: none !important;
     }
-    body.arFullscreen #infoContainer {
-      width: 100% !important;
-    }
-    body.arFullscreen #arColumns > div {
-      max-height: calc(100vh - 180px) !important;
-    }
-    /* Hide non-Advanced-Run sections in fullscreen so the user isn't
-     * fighting accordion noise while picking devices. */
+
+    /* Advanced Run fullscreen: show only the Advanced Run section */
     body.arFullscreen #batchRuns,
     body.arFullscreen #nSch,
     body.arFullscreen #sSch,
@@ -92,13 +116,37 @@
     body.arFullscreen #variables {
       display: none !important;
     }
-    body.arFullscreen .infoBar {
-      /* Hide siblings of Advanced Run; keep the Advanced Run bar itself
-       * (it's the one before #multiRun). */
-    }
     body.arFullscreen #history > .infoBar:not(#arInfoBar) {
       display: none !important;
     }
+    body.arFullscreen #multiRun {
+      flex: 1 1 auto !important; display: flex !important; flex-direction: column !important;
+      min-height: 0 !important;
+    }
+    body.arFullscreen #arColumns {
+      flex: 1 1 auto !important; min-height: 0 !important;
+    }
+    body.arFullscreen #arColumns > div {
+      max-height: none !important; height: 100% !important;
+    }
+
+    /* Batch Deployments fullscreen: show only #batchRuns */
+    body.brFullscreen #multiRun,
+    body.brFullscreen #nSch,
+    body.brFullscreen #sSch,
+    body.brFullscreen #scriptHistory,
+    body.brFullscreen #nodeHistory,
+    body.brFullscreen #variables {
+      display: none !important;
+    }
+    body.brFullscreen #history > .infoBar:not(#brInfoBar) {
+      display: none !important;
+    }
+    body.brFullscreen #batchRuns {
+      flex: 1 1 auto !important; min-height: 0 !important;
+      overflow-y: auto !important;
+    }
+
     .arFullscreenBtn {
       margin-left: auto; padding: 2px 6px; font-size: 11px;
       background: transparent; border: 1px solid var(--border2); border-radius: var(--radius);
@@ -594,7 +642,12 @@
               <!-- Hidden table for backwards compat with checkbox queries -->
               <table id="mRunTbl" style="display:none;" cellspacing="0" cellpadding="0"></table>
           </div>
-          <div class="infoBar">Batch Deployments</div>
+          <div class="infoBar" id="brInfoBar">
+            <span>Batch Deployments</span>
+            <button class="arFullscreenBtn" id="brFullscreenBtn" onclick="event.stopPropagation(); toggleBrFullscreen();" title="Toggle fullscreen (Esc to exit)" aria-label="Toggle fullscreen">
+              <svg id="brFsIcon" viewBox="0 0 16 16" width="14" height="14" style="fill:currentColor;"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"/></svg>
+            </button>
+          </div>
           <div id="batchRuns" class="infoContent" style="padding:12px 14px;">
               <div id="batchRunList"><span style="color:var(--fg3);font-size:12px;">No batch deployments yet.</span></div>
           </div>
@@ -1334,6 +1387,7 @@ function renderBatchCard(run) {
         html += '<button onclick="batchAction(\'deleteBatchRun\',\'' + batchId + '\')" style="color:var(--red)">Delete</button>';
     }
     html += '<button onclick="exportBatchCsv(\'' + batchId + '\')" title="Download per-device results as CSV">Export CSV</button>';
+    html += '<button onclick="copyBatchAll(\'' + batchId + '\', this)" title="Copy ALL devices\' output to clipboard"><svg viewBox="0 0 16 16" width="13" height="13" style="vertical-align:middle;display:inline-block;fill:currentColor;margin-right:4px;"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg><span>Copy All</span></button>';
     html += '</div>';
 
     // Error-pattern summary — groups error/unresponsive nodes by a hash of their
@@ -1366,11 +1420,14 @@ function renderBatchCard(run) {
         var n = rec.n;
         var stColor = n.status === 'completed' ? 'var(--green)' : n.status === 'error' ? 'var(--red)' : n.status === 'unresponsive' ? '#ea580c' : n.status === 'skipped' ? '#9ca3af' : n.status === 'dispatched' ? 'var(--yellow)' : n.status === 'queued' ? '#3b82f6' : 'var(--fg3)';
         var detail = n.errorVal ? ' — ' + escHtml(n.errorVal).substring(0, 100) : n.returnVal ? ' — ' + escHtml(n.returnVal).substring(0, 80) : '';
-        // Use MC's canonical gotoDevice() API rather than URL routing — the
-        // /?viewmode=10&gotonode=... path requires the domain segment that's
-        // baked into the nodeId, and full-page navigation breaks the iframe.
-        var fullNodeId = (n.nodeId || '').replace(/'/g, "\\'");
-        var nodeLink = '<a href="javascript:void(0);" onclick="parent.gotoDevice(\'' + fullNodeId + '\', 10); event.stopPropagation(); return false;" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + escHtml(n.nodeName || n.nodeId) + '</a>';
+        // Open in a NEW MC tab/window. Use the canonical MC URL pattern
+        // (?viewmode=10&gotonode=<suffix>) so the new tab boots straight
+        // into the device's Console panel. _id is "node/<domain>/<suffix>";
+        // the suffix is the third segment.
+        var nodeIdParts = (n.nodeId || '').split('/');
+        var nodeIdSuffix = nodeIdParts.length >= 3 ? nodeIdParts[2] : (n.nodeId || '');
+        var nodeIdSuffixEnc = encodeURIComponent(nodeIdSuffix);
+        var nodeLink = '<a href="/?viewmode=10&gotonode=' + nodeIdSuffixEnc + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Open device in new tab">' + escHtml(n.nodeName || n.nodeId) + '</a>';
         // Row click opens the full-output modal. Skip the click handler on rows that
         // have nothing to show yet (pending/queued/dispatched with no output).
         var hasOutput = !!(n.returnVal || n.errorVal);
@@ -1545,41 +1602,53 @@ function flashCopyButton() {
     setTimeout(function() { lbl.textContent = orig; }, 900);
 }
 
-// Esc closes the modal.
+// Esc closes the modal, or exits whichever fullscreen mode is active.
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         if (document.getElementById('batchOutputOverlay').classList.contains('visible')) {
             closeBatchOutput();
         } else if (document.body.classList.contains('arFullscreen')) {
             toggleArFullscreen();
+        } else if (document.body.classList.contains('brFullscreen')) {
+            toggleBrFullscreen();
         }
     }
 });
 
-// ── Advanced Run fullscreen toggle ─────────────────────────────────────────
-// Hides the left script tree + top toolbar via body.arFullscreen so the
-// node-picker + filter columns get the full iframe width. Independent of
-// the output modal — both can be toggled separately.
-function toggleArFullscreen() {
-    var on = document.body.classList.toggle('arFullscreen');
-    var icon = document.getElementById('arFsIcon');
-    if (icon) {
-        // Swap glyph: maximize (corners-out) vs restore (corners-in).
-        if (on) {
-            icon.innerHTML = '<path d="M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5m5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10 4.5v-4a.5.5 0 0 1 .5-.5M0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5m10 1a1.5 1.5 0 0 1 1.5-1.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0z"/>';
-        } else {
-            icon.innerHTML = '<path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"/>';
-        }
+// ── Fullscreen toggle (shared) ─────────────────────────────────────────────
+// Each section (Advanced Run, Batch Deployments) has its own body class so
+// only one can be fullscreen at a time and the section-specific CSS rules
+// can hide/show the right sibling accordion bars.
+var FS_MAXIMIZE_PATH = '<path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"/>';
+var FS_RESTORE_PATH = '<path d="M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5m5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10 4.5v-4a.5.5 0 0 1 .5-.5M0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5m10 1a1.5 1.5 0 0 1 1.5-1.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0z"/>';
+
+function _fsToggle(bodyClass, otherBodyClass, iconId, openContentId, infoBarId) {
+    // If the OTHER section is fullscreen, switch off it first.
+    if (otherBodyClass && document.body.classList.contains(otherBodyClass)) {
+        document.body.classList.remove(otherBodyClass);
+        // also restore the other section's icon
+        var otherIconId = otherBodyClass === 'arFullscreen' ? 'arFsIcon' : 'brFsIcon';
+        var oi = document.getElementById(otherIconId);
+        if (oi) oi.innerHTML = FS_MAXIMIZE_PATH;
     }
-    // Make sure the Advanced Run section is OPEN when entering fullscreen.
+    var on = document.body.classList.toggle(bodyClass);
+    var icon = document.getElementById(iconId);
+    if (icon) icon.innerHTML = on ? FS_RESTORE_PATH : FS_MAXIMIZE_PATH;
+    // Ensure the target section's content is open (its accordion expanded).
     if (on) {
-        var mr = document.getElementById('multiRun');
-        if (mr) mr.style.display = 'block';
-        var bar = document.getElementById('arInfoBar');
+        var content = document.getElementById(openContentId);
+        if (content) content.style.display = 'block';
+        var bar = document.getElementById(infoBarId);
         if (bar && !bar.classList.contains('active')) bar.classList.add('active');
     }
-    // Tell MC's iframe sizer that our height changed.
     if (typeof resizeIframe === 'function') resizeIframe();
+}
+
+function toggleArFullscreen() {
+    _fsToggle('arFullscreen', 'brFullscreen', 'arFsIcon', 'multiRun', 'arInfoBar');
+}
+function toggleBrFullscreen() {
+    _fsToggle('brFullscreen', 'arFullscreen', 'brFsIcon', 'batchRuns', 'brInfoBar');
 }
 
 // ── Error-pattern grouping ──────────────────────────────────────────────────
@@ -1646,6 +1715,64 @@ function exportBatchCsv(batchId) {
     document.body.appendChild(a);
     a.click();
     setTimeout(function() { URL.revokeObjectURL(url); a.remove(); }, 100);
+}
+
+// Copy every device's full output to clipboard in one go, formatted with
+// a header per device so it's pasteable into an incident doc or Slack.
+// The button passes its own DOM node as the second arg so we can flash
+// the label without needing an id.
+function copyBatchAll(batchId, btn) {
+    var run = batchRunCache[batchId];
+    if (!run) { console.warn('copyBatchAll: no cached run for', batchId); return; }
+    var lines = [];
+    lines.push('# Batch: ' + (run.scriptName || '(unnamed)') + '  (' + (run.nodes || []).length + ' devices)');
+    if (run.createdAt) lines.push('# Started: ' + new Date(run.createdAt * 1000).toISOString());
+    if (run.counts) lines.push('# Counts: ' + JSON.stringify(run.counts));
+    lines.push('');
+    (run.nodes || []).forEach(function(n, i) {
+        var elapsed = (n.dispatchedAt && n.completeTime) ? (n.completeTime - n.dispatchedAt) + 's' : '';
+        lines.push('================================================================');
+        lines.push('# [' + (i + 1) + '/' + run.nodes.length + ']  ' + (n.nodeName || n.nodeId || '?'));
+        lines.push('# status: ' + (n.status || '?') + (elapsed ? '  elapsed: ' + elapsed : ''));
+        lines.push('================================================================');
+        if (n.errorVal) {
+            lines.push('--- STDERR / ERROR ---');
+            lines.push(n.errorVal);
+            lines.push('');
+        }
+        if (n.returnVal) {
+            lines.push('--- STDOUT ---');
+            lines.push(n.returnVal);
+        }
+        if (!n.errorVal && !n.returnVal) {
+            lines.push('(no output captured)');
+        }
+        lines.push('');
+    });
+    var blob = lines.join('\n');
+    var ok = function() {
+        if (!btn) return;
+        var lbl = btn.querySelector('span');
+        if (!lbl) return;
+        var orig = lbl.textContent;
+        lbl.textContent = 'Copied!';
+        setTimeout(function() { lbl.textContent = orig; }, 1100);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(blob).then(ok, function() { copyBatchAllFallback(blob, ok); });
+    } else {
+        copyBatchAllFallback(blob, ok);
+    }
+}
+function copyBatchAllFallback(s, ok) {
+    var ta = document.createElement('textarea');
+    ta.value = s;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); ok && ok(); } catch (e) { console.warn('copy failed', e); }
+    document.body.removeChild(ta);
 }
 
 var coll = document.getElementsByClassName("infoBar");
