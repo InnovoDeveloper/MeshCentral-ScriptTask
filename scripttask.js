@@ -421,7 +421,13 @@ module.exports.innovoscripttask = function (parent) {
                 if (jobIdStr === matchId) {
                     run.nodes[i].status = errVal ? 'error' : 'completed';
                     run.nodes[i].completeTime = now;
-                    run.nodes[i].returnVal = retVal ? (retVal.length > 500 ? retVal.substring(0, 497) + '...' : retVal) : null;
+                    // Store up to 64 KB of stdout per node. Patch 7's auto-chain (Patch 6 +
+                    // FSI + add-to + refresh-tags) produces multi-KB output; the old 500-char
+                    // cap was lossy enough that the Phase 3 results view couldn't diagnose
+                    // failures. Cap exists only to keep the batch run doc well under Mongo's
+                    // 16 MB limit (50 devices x 64 KB = ~3 MB).
+                    var MAX_BATCH_RETVAL = 65536;
+                    run.nodes[i].returnVal = retVal ? (retVal.length > MAX_BATCH_RETVAL ? retVal.substring(0, MAX_BATCH_RETVAL - 32) + '\n... [truncated at ' + MAX_BATCH_RETVAL + ' chars]' : retVal) : null;
                     run.nodes[i].errorVal = errVal || null;
                     break;
                 }

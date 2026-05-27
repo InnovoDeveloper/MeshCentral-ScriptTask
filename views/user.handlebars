@@ -320,9 +320,71 @@
     .batchBtns button { font-size: 11px; padding: 4px 12px; border-radius: var(--radius); border: 1px solid var(--border2); background: var(--bg); color: var(--fg); cursor: pointer; font-weight: 500; }
     .batchBtns button:hover { border-color: var(--accent); color: var(--accent); }
     .batchNodeList { max-height: 50vh; overflow-y: auto; margin-top: 6px; font-size: 11px; border-top: 1px solid var(--border); padding-top: 4px; }
-    .batchNodeRow { display: flex; justify-content: space-between; padding: 3px 4px; border-bottom: 1px solid var(--border); gap: 12px; }
+    .batchNodeRow { display: flex; justify-content: space-between; padding: 3px 4px; border-bottom: 1px solid var(--border); gap: 12px; cursor: pointer; }
     .batchNodeRow:nth-child(even) { background: var(--bg2); }
     .batchNodeRow:hover { background: var(--bg3); }
+    .batchNodeRow.no-output { cursor: default; }
+
+    /* ── Batch error-pattern summary ─────────────── */
+    .batchErrGroup {
+      margin-top: 6px; padding: 8px 10px; background: var(--bg2);
+      border-left: 3px solid var(--red); border-radius: 4px;
+    }
+    .batchErrGroup .egHead { font-size: 11px; color: var(--fg2); margin-bottom: 4px; display: flex; justify-content: space-between; gap: 8px; }
+    .batchErrGroup .egCount { font-weight: 700; color: var(--red); }
+    .batchErrGroup .egExcerpt { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; color: var(--fg); white-space: pre-wrap; max-height: 60px; overflow: hidden; }
+    .batchErrGroup .egMembers { margin-top: 6px; font-size: 10px; color: var(--fg3); }
+    .batchErrGroup .egMember { display: inline-block; margin-right: 6px; cursor: pointer; }
+    .batchErrGroup .egMember:hover { color: var(--accent); text-decoration: underline; }
+
+    /* ── Batch node output modal ─────────────────── */
+    #batchOutputOverlay {
+      display: none; position: fixed; inset: 0; z-index: 10000;
+      background: rgba(0, 0, 0, 0.45); align-items: center; justify-content: center;
+    }
+    #batchOutputOverlay.visible { display: flex; }
+    #batchOutputBox {
+      background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      width: 90vw; max-width: 1100px; height: 80vh;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #batchOutputHead {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px; background: var(--bg2); border-bottom: 1px solid var(--border);
+      font-size: 13px; font-weight: 600;
+    }
+    #batchOutputHead .boTitle { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+    #batchOutputHead .boNodeName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #batchOutputHead .boStatus { font-size: 11px; padding: 2px 8px; border-radius: 8px; font-weight: 600; }
+    #batchOutputHead .boStatus.completed { background: rgba(22,163,74,0.15); color: var(--green); }
+    #batchOutputHead .boStatus.error { background: rgba(220,38,38,0.15); color: var(--red); }
+    #batchOutputHead .boStatus.unresponsive { background: rgba(234,88,12,0.15); color: #ea580c; }
+    #batchOutputHead .boBtns { display: flex; gap: 6px; align-items: center; }
+    #batchOutputHead .boBtns button {
+      font-size: 11px; padding: 4px 10px; border-radius: var(--radius);
+      border: 1px solid var(--border2); background: var(--bg); color: var(--fg);
+      cursor: pointer; font-weight: 500;
+    }
+    #batchOutputHead .boBtns button:hover { border-color: var(--accent); color: var(--accent); }
+    #batchOutputHead input.boFind {
+      font-size: 11px; padding: 3px 8px; border: 1px solid var(--border2); border-radius: var(--radius);
+      background: var(--bg); color: var(--fg); width: 160px; outline: none;
+    }
+    #batchOutputHead input.boFind:focus { border-color: var(--accent); }
+    #batchOutputMeta {
+      padding: 6px 14px; background: var(--bg2); border-bottom: 1px solid var(--border);
+      font-size: 11px; color: var(--fg2); display: flex; gap: 16px; flex-wrap: wrap;
+    }
+    #batchOutputBody {
+      flex: 1; overflow: auto; padding: 12px 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+      background: var(--bg); color: var(--fg);
+    }
+    #batchOutputBody mark { background: #fef08a; color: #422006; padding: 0 1px; border-radius: 2px; }
+    #batchOutputBody .boErrSection { color: var(--red); border-left: 3px solid var(--red); padding-left: 10px; margin-bottom: 12px; }
+    #batchOutputBody .boEmpty { color: var(--fg3); font-style: italic; }
 
     /* ── Device tooltip ──────────────────────────── */
     #arTooltip {
@@ -385,6 +447,26 @@
 </style>
 <body onload="doOnLoad();">
 <div id="arTooltip"></div>
+
+<!-- Batch node output viewer -->
+<div id="batchOutputOverlay" onclick="if(event.target===this) closeBatchOutput();">
+  <div id="batchOutputBox" role="dialog" aria-modal="true" aria-label="Script output">
+    <div id="batchOutputHead">
+      <div class="boTitle">
+        <span class="boStatus" id="boStatus"></span>
+        <span class="boNodeName" id="boNodeName"></span>
+      </div>
+      <div class="boBtns">
+        <input type="text" class="boFind" id="boFind" placeholder="Find in output..." oninput="findInBatchOutput()" />
+        <button onclick="copyBatchOutput()" title="Copy output to clipboard">Copy</button>
+        <button onclick="closeBatchOutput()">Close</button>
+      </div>
+    </div>
+    <div id="batchOutputMeta"></div>
+    <div id="batchOutputBody"></div>
+  </div>
+</div>
+
 <div id="scriptTaskUser">
   <div id="dropBlock" style="display:none;"><b>&checkmark;</b></div>
   <div id="uploadBar">
@@ -545,6 +627,10 @@ var variables = [];
 var varScopes = { global: 'Global', script: 'Script', mesh: 'Mesh', node: 'Node' };
 var metaCategories = [];
 var metaTags = [];
+// Cache of last-seen batch run docs keyed by batchId. Populated by batchRunList +
+// batchProgress handlers so the per-node output modal can read full retVal/errVal
+// without a server round-trip.
+var batchRunCache = {};
 window._innovoMeta = { categories: [], tags: [] }; // shared with editor popup
 
 function escHtml(s) {
@@ -1199,17 +1285,49 @@ function renderBatchCard(run) {
         }
         html += '<button onclick="batchAction(\'deleteBatchRun\',\'' + batchId + '\')" style="color:var(--red)">Delete</button>';
     }
+    html += '<button onclick="exportBatchCsv(\'' + batchId + '\')" title="Download per-device results as CSV">Export CSV</button>';
     html += '</div>';
+
+    // Error-pattern summary — groups error/unresponsive nodes by a hash of their
+    // errorVal (or returnVal tail for unresponsive). Surfaces the dominant failure
+    // pattern when one script breaks across N devices the same way.
+    var errGroups = computeErrorPatternGroups(run.nodes || []);
+    if (errGroups.length > 0) {
+        html += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;color:var(--red);font-weight:600;">Error patterns (' + errGroups.length + ' group' + (errGroups.length === 1 ? '' : 's') + ')</summary>';
+        errGroups.slice(0, 3).forEach(function(g) {
+            html += '<div class="batchErrGroup">';
+            html += '<div class="egHead"><span>' + escHtml(g.statusLabel) + '</span><span class="egCount">' + g.members.length + ' device' + (g.members.length === 1 ? '' : 's') + '</span></div>';
+            html += '<div class="egExcerpt">' + escHtml(g.excerpt) + '</div>';
+            html += '<div class="egMembers">';
+            g.members.forEach(function(m) {
+                html += '<span class="egMember" onclick="openBatchOutput(\'' + batchId + '\',' + m.idx + ')" title="View full output">' + escHtml(m.name) + '</span>';
+            });
+            html += '</div></div>';
+        });
+        html += '</details>';
+    }
 
     // Device list — sorted: errors first, then running, queued, skipped, pending, completed
     var sortOrder = { error: 0, unresponsive: 1, dispatched: 2, queued: 3, skipped: 4, pending: 5, completed: 6 };
-    var sortedNodes = (run.nodes || []).slice().sort(function(a, b) { return (sortOrder[a.status] || 9) - (sortOrder[b.status] || 9); });
+    // Track original index so clicks resolve to the right node in the cached run.
+    var indexed = (run.nodes || []).map(function(n, i) { return { n: n, i: i }; });
+    var sortedNodes = indexed.slice().sort(function(a, b) { return (sortOrder[a.n.status] || 9) - (sortOrder[b.n.status] || 9); });
     html += '<details id="batchDetails_' + batchId + '" style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;color:var(--accent);font-weight:500;">Show devices (' + total + ')</summary>';
     html += '<div class="batchNodeList" id="batchNodes_' + batchId + '">';
-    sortedNodes.forEach(function(n) {
+    sortedNodes.forEach(function(rec) {
+        var n = rec.n;
         var stColor = n.status === 'completed' ? 'var(--green)' : n.status === 'error' ? 'var(--red)' : n.status === 'unresponsive' ? '#ea580c' : n.status === 'skipped' ? '#9ca3af' : n.status === 'dispatched' ? 'var(--yellow)' : n.status === 'queued' ? '#3b82f6' : 'var(--fg3)';
         var detail = n.errorVal ? ' — ' + escHtml(n.errorVal).substring(0, 100) : n.returnVal ? ' — ' + escHtml(n.returnVal).substring(0, 80) : '';
-        html += '<div class="batchNodeRow" data-status="' + n.status + '"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(n.nodeName || n.nodeId) + '</span><span style="color:' + stColor + ';white-space:nowrap;flex-shrink:0;">' + n.status + detail + '</span></div>';
+        var shortId = (n.nodeId || '').replace('node//', '');
+        var nodeLink = '<a href="/?viewmode=10&gotonode=' + encodeURIComponent(shortId) + '" target="_top" style="color:inherit;text-decoration:none;" onclick="event.stopPropagation();" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + escHtml(n.nodeName || n.nodeId) + '</a>';
+        // Row click opens the full-output modal. Skip the click handler on rows that
+        // have nothing to show yet (pending/queued/dispatched with no output).
+        var hasOutput = !!(n.returnVal || n.errorVal);
+        var rowAttrs = 'class="batchNodeRow' + (hasOutput ? '' : ' no-output') + '" data-status="' + n.status + '"';
+        if (hasOutput) {
+            rowAttrs += ' onclick="openBatchOutput(\'' + batchId + '\',' + rec.i + ')" title="Click to view full output"';
+        }
+        html += '<div ' + rowAttrs + '><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nodeLink + '</span><span style="color:' + stColor + ';white-space:nowrap;flex-shrink:0;">' + n.status + detail + '</span></div>';
     });
     html += '</div></details>';
 
@@ -1249,6 +1367,205 @@ function batchRetry(id, statuses) {
 
 function batchAction(action, id) {
     parent.meshserver.send({ action: 'plugin', plugin: 'innovoscripttask', pluginaction: action, id: id });
+}
+
+// ── Batch node output viewer ────────────────────────────────────────────────
+// State for the open modal. Used by find/copy buttons.
+var openBatchOutputState = { batchId: null, nodeIdx: -1, raw: '' };
+
+function openBatchOutput(batchId, nodeIdx) {
+    var run = batchRunCache[batchId];
+    if (!run || !run.nodes || !run.nodes[nodeIdx]) {
+        console.warn('openBatchOutput: no cached run/node for', batchId, nodeIdx);
+        return;
+    }
+    var n = run.nodes[nodeIdx];
+    var overlay = document.getElementById('batchOutputOverlay');
+    var statusEl = document.getElementById('boStatus');
+    var nameEl = document.getElementById('boNodeName');
+    var metaEl = document.getElementById('batchOutputMeta');
+    var bodyEl = document.getElementById('batchOutputBody');
+    var findInput = document.getElementById('boFind');
+
+    statusEl.className = 'boStatus ' + (n.status || '');
+    statusEl.textContent = n.status || 'unknown';
+    nameEl.textContent = n.nodeName || n.nodeId || '(unnamed)';
+
+    // Meta line — script name + dispatched/completed times + elapsed
+    var metaParts = [];
+    if (run.scriptName) metaParts.push('Script: ' + run.scriptName);
+    if (n.dispatchedAt) metaParts.push('Dispatched: ' + new Date(n.dispatchedAt * 1000).toLocaleString());
+    if (n.completeTime) {
+        metaParts.push('Completed: ' + new Date(n.completeTime * 1000).toLocaleString());
+        if (n.dispatchedAt) {
+            var secs = n.completeTime - n.dispatchedAt;
+            metaParts.push('Elapsed: ' + Math.floor(secs / 60) + 'm ' + (secs % 60) + 's');
+        }
+    }
+    if (n.errorVal && n.returnVal) metaParts.push('(both error and stdout returned)');
+    metaEl.textContent = metaParts.join(' · ');
+
+    // Body: errorVal as a highlighted block, then returnVal.
+    var raw = '';
+    var html = '';
+    if (n.errorVal) {
+        raw += '[STDERR / ERROR]\n' + n.errorVal + '\n\n';
+        html += '<div class="boErrSection">' + escHtml(n.errorVal) + '</div>';
+    }
+    if (n.returnVal) {
+        raw += '[STDOUT]\n' + n.returnVal;
+        html += escHtml(n.returnVal);
+    }
+    if (!n.errorVal && !n.returnVal) {
+        raw = '';
+        html = '<span class="boEmpty">No output captured for this node yet.</span>';
+    }
+    bodyEl.innerHTML = html;
+
+    openBatchOutputState = { batchId: batchId, nodeIdx: nodeIdx, raw: raw };
+    findInput.value = '';
+    overlay.classList.add('visible');
+    setTimeout(function() { findInput.focus(); }, 50);
+}
+
+function closeBatchOutput() {
+    document.getElementById('batchOutputOverlay').classList.remove('visible');
+    openBatchOutputState = { batchId: null, nodeIdx: -1, raw: '' };
+}
+
+function findInBatchOutput() {
+    var q = document.getElementById('boFind').value || '';
+    var bodyEl = document.getElementById('batchOutputBody');
+    var st = openBatchOutputState;
+    // Re-render fresh, then wrap matches in <mark>.
+    var rawErr = '', rawOut = '';
+    var run = batchRunCache[st.batchId];
+    if (run && run.nodes && run.nodes[st.nodeIdx]) {
+        rawErr = run.nodes[st.nodeIdx].errorVal || '';
+        rawOut = run.nodes[st.nodeIdx].returnVal || '';
+    }
+    function hi(s) {
+        if (!q) return escHtml(s);
+        var qe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return escHtml(s).replace(new RegExp(escHtml(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), function(m) { return '<mark>' + m + '</mark>'; });
+    }
+    var html = '';
+    if (rawErr) html += '<div class="boErrSection">' + hi(rawErr) + '</div>';
+    if (rawOut) html += hi(rawOut);
+    if (!rawErr && !rawOut) html = '<span class="boEmpty">No output captured for this node yet.</span>';
+    bodyEl.innerHTML = html;
+    // Scroll to first match if any.
+    if (q) {
+        var firstMark = bodyEl.querySelector('mark');
+        if (firstMark) firstMark.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+}
+
+function copyBatchOutput() {
+    var st = openBatchOutputState;
+    if (!st.raw) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(st.raw).then(function() {
+            flashCopyButton();
+        }, function() {
+            fallbackCopy(st.raw);
+        });
+    } else {
+        fallbackCopy(st.raw);
+    }
+}
+
+function fallbackCopy(s) {
+    var ta = document.createElement('textarea');
+    ta.value = s;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); flashCopyButton(); } catch (e) { console.warn('copy failed', e); }
+    document.body.removeChild(ta);
+}
+
+function flashCopyButton() {
+    var btns = document.querySelectorAll('#batchOutputHead .boBtns button');
+    if (!btns.length) return;
+    var copyBtn = btns[0];
+    var orig = copyBtn.textContent;
+    copyBtn.textContent = 'Copied!';
+    setTimeout(function() { copyBtn.textContent = orig; }, 900);
+}
+
+// Esc closes the modal.
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('batchOutputOverlay').classList.contains('visible')) {
+        closeBatchOutput();
+    }
+});
+
+// ── Error-pattern grouping ──────────────────────────────────────────────────
+// Groups nodes that share an error pattern. Two nodes are "the same" if their
+// normalized errorVal (collapsed whitespace, lowercased, last 200 chars) matches.
+// Returns groups sorted by size desc. Used by renderBatchCard for the
+// "Error patterns" details section.
+function computeErrorPatternGroups(nodes) {
+    var groups = {};
+    nodes.forEach(function(n, idx) {
+        if (n.status !== 'error' && n.status !== 'unresponsive') return;
+        var src = n.errorVal || n.returnVal || '';
+        if (!src) return;
+        var norm = src.replace(/\s+/g, ' ').trim().toLowerCase();
+        // Use the tail because errors usually end with the relevant message.
+        var key = (n.status || 'unknown') + '::' + norm.slice(-200);
+        if (!groups[key]) {
+            groups[key] = {
+                statusLabel: n.status,
+                excerpt: src.split('\n').slice(-5).join('\n').slice(-280),
+                members: []
+            };
+        }
+        groups[key].members.push({ idx: idx, name: n.nodeName || n.nodeId || '(unnamed)' });
+    });
+    var arr = Object.keys(groups).map(function(k) { return groups[k]; });
+    arr.sort(function(a, b) { return b.members.length - a.members.length; });
+    return arr;
+}
+
+// ── CSV export ──────────────────────────────────────────────────────────────
+function exportBatchCsv(batchId) {
+    var run = batchRunCache[batchId];
+    if (!run) { console.warn('exportBatchCsv: no cached run for', batchId); return; }
+    var rows = [['node_name', 'node_id', 'status', 'dispatched_at', 'completed_at', 'elapsed_sec', 'error_val', 'return_val']];
+    (run.nodes || []).forEach(function(n) {
+        var dispatched = n.dispatchedAt ? new Date(n.dispatchedAt * 1000).toISOString() : '';
+        var completed = n.completeTime ? new Date(n.completeTime * 1000).toISOString() : '';
+        var elapsed = (n.dispatchedAt && n.completeTime) ? String(n.completeTime - n.dispatchedAt) : '';
+        rows.push([
+            n.nodeName || '',
+            (n.nodeId || '').replace('node//', ''),
+            n.status || '',
+            dispatched,
+            completed,
+            elapsed,
+            n.errorVal || '',
+            n.returnVal || ''
+        ]);
+    });
+    var csv = rows.map(function(row) {
+        return row.map(function(cell) {
+            var s = String(cell || '');
+            // Always quote; double internal quotes per RFC 4180.
+            return '"' + s.replace(/"/g, '""') + '"';
+        }).join(',');
+    }).join('\r\n');
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    var fname = 'batch_' + (run.scriptName || 'unnamed').replace(/[^a-zA-Z0-9._-]+/g, '_') + '_' + new Date(((run.createdAt || 0) * 1000) || Date.now()).toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.csv';
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(url); a.remove(); }, 100);
 }
 
 var coll = document.getElementsByClassName("infoBar");
@@ -1572,12 +1889,16 @@ function redrawScriptTree() {
       var list = Q('batchRunList');
       if (runs.length === 0) { list.innerHTML = '<span style="color:var(--fg3);font-size:12px;">No batch deployments yet.</span>'; return; }
       list.innerHTML = '';
-      runs.forEach(function(run) { list.insertAdjacentHTML('beforeend', renderBatchCard(run)); });
+      runs.forEach(function(run) {
+          batchRunCache[run._id] = run;
+          list.insertAdjacentHTML('beforeend', renderBatchCard(run));
+      });
       resizeIframe();
   }
   parent.pluginHandler.innovoscripttask.batchProgress = function(message) {
       var run = message.event.batchRun;
       if (!run) return;
+      batchRunCache[run._id] = run;
       var list = Q('batchRunList');
       var existing = document.getElementById('batch_' + run._id);
       if (existing) {
@@ -1591,6 +1912,7 @@ function redrawScriptTree() {
   parent.pluginHandler.innovoscripttask.batchDeleted = function(message) {
       var batchId = message.event.batchId;
       if (!batchId) return;
+      delete batchRunCache[batchId];
       var el = document.getElementById('batch_' + batchId);
       if (el) el.remove();
       var list = Q('batchRunList');
